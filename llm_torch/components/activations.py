@@ -11,4 +11,10 @@ class GELU(torch.nn.Module):
         ))
 
 
+class SiLU(torch.nn.Module):
+
+    def forward(self, x):
+        return x * torch.sigmoid(x)
+
+
 get = make_get_function(globals())

@@ -1,7 +1,7 @@
 from llm_torch.components.activations import GELU
 from llm_torch.components.attention import MultiHeadAttention
 from llm_torch.components.callbacks import Callback, LRCosineAnnealing, GenerateSample, ModelCheckpoint
-from llm_torch.components.feedforward_blocks import FFBlock
+from llm_torch.components.feedforward_blocks import FFBlock, SwiGLUBlock
 from llm_torch.components.normalizers import LayerNorm
 
 __all__ = [
@@ -13,4 +13,5 @@ __all__ = [
     "ModelCheckpoint",
     "FFBlock",
     "LayerNorm",
+    "SwiGLUBlock"
 ]

@@ -4,8 +4,8 @@ from llm_torch import configs
 from llm_torch.components import callbacks
 
 
-GPT2_CONFIG_124 = configs.LLMConfig(
-    vocab_size=50257,
+LLAMA2_CONFIG_7B = configs.LLMConfig(
+    vocab_size=50257,  # original paper used 32000.
     context_length=256,
     dataset_config=configs.DatasetConfig(
        batch_size=32,  # it originally trained on 512
@@ -14,10 +14,13 @@ GPT2_CONFIG_124 = configs.LLMConfig(
        stride=1,
     ),
     model_config=configs.ModelConfig(
-       emb_dim=768,
-       n_heads=12,
-       n_layers=12,
-       hidden_dim=3072,  # emb_dim * 4
+       emb_dim=4096,
+       hidden_dim=11008,
+       n_heads=32,
+       n_layers=32,
+       drop_rate=None,
+       qkv_bias=False,
+       dtype=torch.bfloat16
     ),
     train_config=configs.TrainerConfig(
        epochs=3,

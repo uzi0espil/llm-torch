@@ -61,8 +61,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Train a language model.")
     parser.add_argument("--data_path", type=str, required=True, help="Path to the training data.")
     parser.add_argument("--llm", type=str, required=True, help="Name of the language model to train.")
-    parser.add_argument("--size", type=int, required=False, help="Size of the language model.",
-                        default=124)
+    parser.add_argument("--size", type=str, required=False, help="Size of the language model.",
+                        default="124")
     parser.add_argument("--data_split", type=float, default=0.8, help="Ratio of data to use for training.")
     parser.add_argument("--to_save", type=str, default=None, help="Path to save the trained model.")
     parser.add_argument("--device", "-d", type=str, default="cuda", help="Device to train on.")

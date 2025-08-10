@@ -17,8 +17,8 @@ class GPT2(BaseLLMModel):
     def __init__(self, model_cfg: ModelConfig, vocab_size, context_length):
         super().__init__(model_cfg, vocab_size, context_length)
 
-        self.tok_embedding = nn.Embedding(vocab_size, model_cfg.emb_dim)
-        self.pos_embedding = nn.Embedding(context_length, model_cfg.emb_dim)
+        self.tok_embedding = nn.Embedding(vocab_size, model_cfg.emb_dim, dtype=model_cfg.dtype)
+        self.pos_embedding = nn.Embedding(context_length, model_cfg.emb_dim, dtype=model_cfg.dtype)
 
         self.blocks = nn.Sequential(*[TransformerBlock(model_cfg,
                                                        context_length=context_length,
@@ -28,7 +28,7 @@ class GPT2(BaseLLMModel):
                                                        activation=GELU) for _ in range(model_cfg.n_layers)])
         self.dropout = nn.Dropout(model_cfg.drop_rate)
         self.norm = LayerNorm(model_cfg.emb_dim)
-        self.output = nn.Linear(model_cfg.emb_dim, vocab_size, bias=False)
+        self.output = nn.Linear(model_cfg.emb_dim, vocab_size, dtype=model_cfg.dtype, bias=False)
 
     def forward(self, x):
         batch_size, seq_length = x.shape

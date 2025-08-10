@@ -16,7 +16,8 @@ GPT2_CONFIG_124 = configs.LLMConfig(
     model_config=configs.ModelConfig(
        emb_dim=768,
        n_heads=12,
-       n_layers=12
+       n_layers=12,
+       hidden_dim=3072,  # emb_dim * 4
     ),
     train_config=configs.TrainerConfig(
        epochs=3,

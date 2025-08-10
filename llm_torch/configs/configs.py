@@ -19,9 +19,11 @@ class DatasetConfig:
 class ModelConfig:
     emb_dim: int
     n_heads: int
+    hidden_dim: int
     n_layers: int = 12
     drop_rate: Optional[float] = 0.1
     qkv_bias: Optional[bool] = False
+    dtype: torch.dtype = torch.float32
 
 
 @dataclass

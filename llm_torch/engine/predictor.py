@@ -11,7 +11,7 @@ class Predictor(object):
     def __init__(self, model, tokenizer, eos_id=None, pad_id=0, allowed_special: Optional[set] = None, device='cpu'):
         self.model = model
         self.model.eval()  # always in eval state.
-        self.context_size = self.model.pos_embedding.weight.shape[0]
+        self.context_length = self.model.context_length
         self.pad_id = pad_id
         self.tokenizer = tokenizer
         self.eos_id = eos_id
@@ -23,7 +23,8 @@ class Predictor(object):
         encoded_text = [self.tokenizer.encode(t, allowed_special=self.allowed_special) for t in text]
 
         padded = [
-            seq[:self.context_size] + [self.pad_id] * (self.context_size - len(seq)) for seq in encoded_text
+            [self.pad_id] * (self.context_length - len(seq[-self.context_length:])) + seq[-self.context_length:]
+            for seq in encoded_text
         ]
 
         return torch.tensor(padded)
@@ -37,7 +38,7 @@ class Predictor(object):
             raise ValueError('please set either `max_new_tokens` or eos_id.')
 
         for _ in range(max_new_tokens):
-            ids = ids[:, -self.context_size:]
+            ids = ids[:, -self.context_length:]
 
             with torch.no_grad():
                 logits = self.model(ids)
@@ -64,7 +65,15 @@ class Predictor(object):
         return ids
 
     def decode(self, ids_list: List[torch.LongTensor]):
-        return [self.tokenizer.decode(ids.tolist()) for ids in ids_list]
+        decoded_texts = []
+        for ids in ids_list:
+            try:
+                start_index = (ids != self.pad_id).nonzero(as_tuple=True)[0][0]
+            except IndexError:
+                start_index = len(ids)
+            trimmed_ids = ids[start_index:]
+            decoded_texts.append(self.tokenizer.decode(trimmed_ids.tolist()))
+        return decoded_texts
 
     def predict(self, text: List[str] | str, max_new_tokens, temperature=1., top_k=None):
         ids = self.encode(text).to(self.device)

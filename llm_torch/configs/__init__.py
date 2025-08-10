@@ -1,8 +1,9 @@
 from llm_torch.configs.configs import LLMConfig, TrainerConfig, DatasetConfig, CallbackConfig, ModelConfig
 from llm_torch.configs.gpt import GPT2_CONFIG_124
+from llm_torch.configs.llama import LLAMA2_CONFIG_7B
 
 
-__all__ = ["get", "LLMConfig", "GPT2_CONFIG_124", "TrainerConfig", "DatasetConfig",
+__all__ = ["get", "LLMConfig", "GPT2_CONFIG_124", "LLAMA2_CONFIG_7B", "TrainerConfig", "DatasetConfig",
            "CallbackConfig", "ModelConfig"]
 
 

@@ -1,4 +1,4 @@
-from abc import ABCMeta
+from abc import ABCMeta, abstractmethod
 import torch
 from typing import Optional
 
@@ -14,7 +14,13 @@ class BaseLLMModel(torch.nn.Module, metaclass=ABCMeta):
         self.vocab_size = vocab_size
         self.context_length = context_length
 
-    def forward(self, x):
+    def forward(self, x, use_cache: bool = False):
+        raise NotImplementedError
+
+    @property
+    @abstractmethod
+    def transformer_blocks(self) -> torch.nn.ModuleList:
+        """Return the List of blocks"""
         raise NotImplementedError
 
     def overall_state_dict(self, save_to: Optional[str] = None) -> dict:
@@ -34,3 +40,7 @@ class BaseLLMModel(torch.nn.Module, metaclass=ABCMeta):
         instance = cls(checkpoint["config"], checkpoint["vocab_size"], checkpoint["context_length"])
         instance.load_state_dict(checkpoint["model_state_dict"])
         return instance
+
+    def reset_kv_cache(self):
+        for block in self.transformer_blocks:
+            block.mha.reset_cache()

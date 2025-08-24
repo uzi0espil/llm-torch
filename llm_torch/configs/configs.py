@@ -23,6 +23,7 @@ class ModelConfig:
     n_layers: int = 12
     drop_rate: Optional[float] = 0.1
     qkv_bias: Optional[bool] = False
+    kv_window_size: Optional[int] = None
     dtype: torch.dtype = torch.float32
 
 

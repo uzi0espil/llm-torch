@@ -10,6 +10,11 @@ class RoPEMixin(object):
       - self.head_dim (even)
       - self.context_length (max sequence length used for precomputation)"""
 
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not issubclass(cls, BaseAttention):
+            raise TypeError(f"{cls.__name__} must inherit from BaseAttention.")
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert hasattr(self, "head_dim"), "RoPEMixin expects self.head_dim to be set before super().__init__()"
@@ -57,7 +62,67 @@ class RoPEMixin(object):
         return self._apply_rope(queries)
 
 
-class MultiHeadAttention(nn.Module):
+class CacheMixin(object):
+    """Mixin class the implements caching KV and retrieving from cache when needed."""
+
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if not issubclass(cls, BaseAttention):
+            raise TypeError(f"{cls.__name__} must inherit from BaseAttention.")
+
+    def __init__(self, *args, kv_window_size: Optional[int] = None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.kv_window_size = kv_window_size or self.context_length
+        self.kv_window_size = self.context_length if self.kv_window_size > self.context_length else self.kv_window_size
+        self.register_buffer("cache_k", None, persistent=False)
+        self.register_buffer("cache_v", None, persistent=False)
+        self.current_pos = 0
+
+    def persist_kv(self, k, v, num_tokens, batch_size):
+        # If the incoming sequence is larger than the cache, only cache the most recent `kv_window_size` tokens.
+        if num_tokens > self.kv_window_size:
+            k = k[:, :, -self.kv_window_size:, :]
+            v = v[:, :, -self.kv_window_size:, :]
+            num_tokens = self.kv_window_size
+
+        if self.cache_k is None or self.cache_k.size(0) != batch_size:
+            self.cache_k = torch.zeros(batch_size, self.n_heads,
+                                       self.kv_window_size, self.head_dim,
+                                       device=k.device, dtype=k.dtype)
+            self.cache_v = torch.zeros_like(self.cache_k)
+            self.current_pos = 0  # pointer to next free slot
+
+        # When the cache overflows, shift the existing cache to the left to make room for new tokens
+        if self.current_pos + num_tokens > self.kv_window_size:
+            overflow = self.current_pos + num_tokens - self.kv_window_size
+            # shift everything left by `overflow` (cheap view-copy)
+            self.cache_k[:, :, :-overflow, :] = self.cache_k[:, :, overflow:, :].clone()
+            self.cache_v[:, :, :-overflow, :] = self.cache_v[:, :, overflow:, :].clone()
+            self.current_pos -= overflow  # pointer after shift
+
+        self.cache_k[:, :, self.current_pos:self.current_pos + num_tokens, :] = k
+        self.cache_v[:, :, self.current_pos:self.current_pos + num_tokens, :] = v
+        self.current_pos += num_tokens
+
+        keys = self.cache_k[:, :, :self.current_pos, :]
+        values = self.cache_v[:, :, :self.current_pos, :]
+        return keys, values
+
+    def get_mask_pool(self, num_tokens, num_keys):
+        if num_tokens == num_keys:  # no cache.
+            return super().get_mask_pool(num_tokens, num_keys)
+
+        # need to offset.
+        offset = num_keys - num_tokens
+        row_idx = torch.arange(num_tokens).unsqueeze(1)  # (num_tokens, 1)
+        col_idx = torch.arange(num_keys).unsqueeze(0)
+        return row_idx + offset < col_idx  # True where j > i + offset
+
+    def reset_cache(self):
+        self.cache_k, self.cache_v = None, None
+
+
+class BaseAttention(nn.Module):
 
     def __init__(self,
                  d_in: int,
@@ -67,7 +132,8 @@ class MultiHeadAttention(nn.Module):
                  n_heads: int = 8,
                  mask: bool = True,
                  qkv_bias: bool = False,
-                 dtype: torch.dtype = torch.float32,):
+                 dtype: torch.dtype = torch.float32,
+                 device: str = 'cpu'):
         assert d_out % n_heads == 0, "d_out must be divisible by n_heads"
         self.d_out = d_out
         self.d_in = d_in
@@ -86,10 +152,6 @@ class MultiHeadAttention(nn.Module):
         self.out_proj = nn.Linear(d_out, d_out, dtype=dtype)
         self.dropout = nn.Dropout(dropout_rate) if dropout_rate else None
 
-        if self.to_mask:
-            mask_buf = torch.triu(torch.ones(context_length, context_length), diagonal=1)
-            self.register_buffer("mask", mask_buf)
-
     # overridable hooks
     def transform_keys(self, keys: torch.Tensor) -> torch.Tensor:
         return keys
@@ -97,7 +159,13 @@ class MultiHeadAttention(nn.Module):
     def transform_queries(self, queries: torch.Tensor) -> torch.Tensor:
         return queries
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def get_mask_pool(self, num_tokens, num_keys):
+        return torch.triu(torch.ones(num_tokens, num_keys, dtype=torch.bool, device=self.W_q.weight.device), diagonal=1)
+
+    def persist_kv(self, k, v, num_tokens, batch_size):
+        return k, v
+
+    def forward(self, x: torch.Tensor, use_cache: bool = False) -> torch.Tensor:
         b, num_tokens, _ = x.shape
         q = self.W_q(x)
         k = self.W_k(x)
@@ -112,12 +180,15 @@ class MultiHeadAttention(nn.Module):
         k = self.transform_keys(k)
         q = self.transform_queries(q)
 
+        if use_cache:
+            k, v = self.persist_kv(k, v, num_tokens=num_tokens, batch_size=b)
+
         # attention scores (b, h, seq, seq)
         attn_scores = q @ k.transpose(2, 3)
 
         if self.to_mask:
-            mask_pool = self.mask.bool()[:num_tokens, :num_tokens]
-            attn_scores = attn_scores.masked_fill(mask_pool, float("-inf"))
+            mask_pool = self.get_mask_pool(num_tokens, attn_scores.size(-1))
+            attn_scores.masked_fill_(mask_pool, float("-inf"))
 
         scale = (self.head_dim ** 0.5)
         attn_weights = torch.softmax(attn_scores / scale, dim=-1)
@@ -129,8 +200,32 @@ class MultiHeadAttention(nn.Module):
         return self.out_proj(context)
 
 
-class RoPEMHA(MultiHeadAttention, RoPEMixin):
+class MultiHeadAttention(CacheMixin, BaseAttention):
+    pass
+
+
+class RoPEMHA(RoPEMixin, MultiHeadAttention):
     pass
 
 
 get = make_get_function(globals())
+
+
+if __name__ == '__main__':
+
+    mha = MultiHeadAttention(
+        d_in=32,
+        d_out=32,
+        context_length=512,
+        dropout_rate=0.1,
+        n_heads=2,
+        mask=True,
+        qkv_bias=False,
+        dtype=torch.float32,
+        kv_window_size=128,
+    )
+
+    x = torch.randn(4, 512, 32, requires_grad=False)
+
+    out = mha(x, use_cache=True)
+    print(out.shape)

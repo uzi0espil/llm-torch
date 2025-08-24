@@ -15,32 +15,28 @@ class RoPEMixin(object):
         if not issubclass(cls, BaseAttention):
             raise TypeError(f"{cls.__name__} must inherit from BaseAttention.")
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, theta_base: float = 10_000.0, *args, **kwargs):
         super().__init__(*args, **kwargs)
         assert hasattr(self, "head_dim"), "RoPEMixin expects self.head_dim to be set before super().__init__()"
         assert hasattr(self, "context_length"), "RoPEMixin expects self.context_length to be set before super().__init__()"
         assert self.head_dim % 2 == 0, "head_dim must be even for RoPE"
+        self.theta_base = theta_base
 
-        cos, sin = self.precompute_rope_params()
-        self.register_buffer("cos", cos)
-        self.register_buffer("sin", sin)
-
-    def precompute_rope_params(self, theta_base: float = 10_000.0):
         half_dim = self.head_dim // 2
-        freqs = 1.0 / (theta_base ** (torch.arange(0, half_dim, dtype=torch.float32) / half_dim))
+        self.register_buffer(
+            "freqs",
+            1.0 / (theta_base ** (torch.arange(0, half_dim, dtype=torch.float32) / half_dim)),
+            persistent=False,
+        )
 
-        positions = torch.arange(self.context_length, dtype=torch.float32)  # shape: (context_length,)
-
-        angles = positions[:, None] * freqs[None, :]  # shape: (context_length, half_dim)
-        return torch.cos(angles), torch.sin(angles)
-
-    def _apply_rope(self, x: torch.Tensor) -> torch.Tensor:
+    def _apply_rope(self, x: torch.Tensor, start_index: int) -> torch.Tensor:
         """Apply RoPE to (b, h, seq, d). Uses even/odd interleaving, not first-half/second-half split."""
         b, h, seq, d = x.shape
-        assert d == self.head_dim
-        # (1,1,seq,half_dim)
-        cos = self.cos[:seq, :].unsqueeze(0).unsqueeze(0).to(dtype=x.dtype, device=x.device)
-        sin = self.sin[:seq, :].unsqueeze(0).unsqueeze(0).to(dtype=x.dtype, device=x.device)
+        half = d // 2
+        pos = torch.arange(start_index, start_index + seq, device=x.device, dtype=torch.float32)
+        angles = pos[:, None] * self.freqs[None, :]
+        cos = torch.cos(angles).unsqueeze(0).unsqueeze(0)  # (1,1,seq,half)
+        sin = torch.sin(angles).unsqueeze(0).unsqueeze(0)
 
         # split into even/odd channels
         x_even = x[..., 0::2]
@@ -55,11 +51,11 @@ class RoPEMixin(object):
         return x_out.to(dtype=x.dtype)
 
     # hooks used by attention
-    def transform_keys(self, keys: torch.Tensor) -> torch.Tensor:
-        return self._apply_rope(keys)
+    def transform_keys(self, keys: torch.Tensor, start_index: int = 0) -> torch.Tensor:
+        return self._apply_rope(keys, start_index)
 
-    def transform_queries(self, queries: torch.Tensor) -> torch.Tensor:
-        return self._apply_rope(queries)
+    def transform_queries(self, queries: torch.Tensor, start_index: int = 0) -> torch.Tensor:
+        return self._apply_rope(queries, start_index)
 
 
 class CacheMixin(object):
@@ -132,8 +128,7 @@ class BaseAttention(nn.Module):
                  n_heads: int = 8,
                  mask: bool = True,
                  qkv_bias: bool = False,
-                 dtype: torch.dtype = torch.float32,
-                 device: str = 'cpu'):
+                 dtype: torch.dtype = torch.float32):
         assert d_out % n_heads == 0, "d_out must be divisible by n_heads"
         self.d_out = d_out
         self.d_in = d_in
@@ -153,10 +148,10 @@ class BaseAttention(nn.Module):
         self.dropout = nn.Dropout(dropout_rate) if dropout_rate else None
 
     # overridable hooks
-    def transform_keys(self, keys: torch.Tensor) -> torch.Tensor:
+    def transform_keys(self, keys: torch.Tensor, start_index: int = 0) -> torch.Tensor:
         return keys
 
-    def transform_queries(self, queries: torch.Tensor) -> torch.Tensor:
+    def transform_queries(self, queries: torch.Tensor, start_index: int = 0) -> torch.Tensor:
         return queries
 
     def get_mask_pool(self, num_tokens, num_keys):
@@ -177,8 +172,11 @@ class BaseAttention(nn.Module):
         v = v.view(b, num_tokens, self.n_heads, self.head_dim).transpose(1, 2)
 
         # optional transforms, such RoPE, etc...
-        k = self.transform_keys(k)
-        q = self.transform_queries(q)
+        start_k = self.current_pos if (use_cache and hasattr(self, "current_pos")) else 0
+        start_q = max(0, start_k + k.size(-2) - q.size(-2))
+
+        k = self.transform_keys(k, start_index=start_k)
+        q = self.transform_queries(q, start_index=start_q)
 
         if use_cache:
             k, v = self.persist_kv(k, v, num_tokens=num_tokens, batch_size=b)

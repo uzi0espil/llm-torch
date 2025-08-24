@@ -31,10 +31,13 @@ class Predictor(object):
             self.use_cache = False
 
     def encode(self, text: List[str] | str):
-        text = [text] if isinstance(text, str) else text
-        encoded_text = [self.tokenizer.encode(t, allowed_special=self.allowed_special) for t in text]
+        if isinstance(text, str):
+            return torch.tensor([self.tokenizer.encode(text, allowed_special=self.allowed_special)], dtype=torch.long)
 
-        return torch.tensor(encoded_text)
+        ids = [self.tokenizer.encode(t, allowed_special=self.allowed_special) for t in text]
+        maxlen = max(len(x) for x in ids)  # pad only based on the longest item in the batch.
+        padded = [x + [self.pad_id] * (maxlen - len(x)) for x in ids]
+        return torch.tensor(padded, dtype=torch.long)
 
     def generate_text(self, ids, max_new_tokens: int, temperature: float = 1., top_k: int = None):
         # todo: make it keep predicting until eos is predicted, if max_new_tokens are None.
@@ -67,7 +70,8 @@ class Predictor(object):
                 probs = torch.softmax(logits, dim=-1)
                 idx_next = torch.multinomial(probs, num_samples=1)
 
-                if idx_next == self.eos_id:
+                # todo: instead of exiting the complete batch if any of the items in the batch has EOS, exit when all.
+                if self.eos_id is not None and (idx_next == self.eos_id).any().item():
                     logger.info("Model predicted End-Of-End token.")
                     break
 

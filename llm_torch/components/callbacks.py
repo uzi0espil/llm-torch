@@ -149,7 +149,7 @@ class GenerateSample(Callback):
     def on_epoch_end(self, epoch, metrics):
         from llm_torch.engine.predictor import Predictor
         predictor = Predictor(self.trainer.model, self.tokenizer, eos_id=self.eos_id,
-                              pad_id=self.pad_id, device=self.device)
+                              pad_id=self.pad_id, use_cache=False, device=self.device)
         text = predictor.predict(self.start_context, self.max_new_tokens, self.temperature, self.top_k)
         print(f"Generated sample: {text}")
 

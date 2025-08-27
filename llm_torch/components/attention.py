@@ -126,26 +126,32 @@ class BaseAttention(nn.Module):
                  context_length: int,
                  dropout_rate: Optional[float] = 0.1,
                  n_heads: int = 8,
+                 n_kv_group: int = 8,
                  mask: bool = True,
                  qkv_bias: bool = False,
                  dtype: torch.dtype = torch.float32):
         assert d_out % n_heads == 0, "d_out must be divisible by n_heads"
+        assert n_kv_group <= n_heads, "kv_group should be <= than n_heads"
+        assert n_heads % n_kv_group == 0, "n_heads must be divisible by n_kv_group (for grouping)"
+
         self.d_out = d_out
         self.d_in = d_in
         self.n_heads = n_heads
         self.head_dim = d_out // n_heads
         self.context_length = context_length
         self.to_mask = mask
+        self.n_kv_group = n_kv_group
 
         # defer super call until attributes are assigned.
         super().__init__()
 
         # linear projections
         self.W_q = nn.Linear(d_in, d_out, dtype=dtype, bias=qkv_bias)
-        self.W_k = nn.Linear(d_in, d_out, dtype=dtype, bias=qkv_bias)
-        self.W_v = nn.Linear(d_in, d_out, dtype=dtype, bias=qkv_bias)
+        self.W_k = nn.Linear(d_in, n_kv_group * head_dim, dtype=dtype, bias=qkv_bias)
+        self.W_v = nn.Linear(d_in, n_kv_group * head_dim, dtype=dtype, bias=qkv_bias)
         self.out_proj = nn.Linear(d_out, d_out, dtype=dtype)
         self.dropout = nn.Dropout(dropout_rate) if dropout_rate else None
+        self.group_size_ = n_heads // n_kv_group
 
     # overridable hooks
     def transform_keys(self, keys: torch.Tensor, start_index: int = 0) -> torch.Tensor:
@@ -168,8 +174,8 @@ class BaseAttention(nn.Module):
 
         # reshape to (b, n_heads, seq, head_dim)
         q = q.view(b, num_tokens, self.n_heads, self.head_dim).transpose(1, 2)
-        k = k.view(b, num_tokens, self.n_heads, self.head_dim).transpose(1, 2)
-        v = v.view(b, num_tokens, self.n_heads, self.head_dim).transpose(1, 2)
+        k = k.view(b, num_tokens, self.n_kv_group, self.head_dim).transpose(1, 2)
+        v = v.view(b, num_tokens, self.n_kv_group, self.head_dim).transpose(1, 2)
 
         # optional transforms, such RoPE, etc...
         start_k = self.current_pos if (use_cache and hasattr(self, "current_pos")) else 0
@@ -180,6 +186,10 @@ class BaseAttention(nn.Module):
 
         if use_cache:
             k, v = self.persist_kv(k, v, num_tokens=num_tokens, batch_size=b)
+
+        if self.group_size_ > 1:
+            k = k.repeat_interleave(self.group_size_, dim=1)
+            v = v.repeat_interleave(self.group_size_, dim=1)
 
         # attention scores (b, h, seq, seq)
         attn_scores = q @ k.transpose(2, 3)
@@ -199,10 +209,41 @@ class BaseAttention(nn.Module):
 
 
 class MultiHeadAttention(CacheMixin, BaseAttention):
+    def __init__(self,
+                 d_in: int,
+                 d_out: int,
+                 context_length: int,
+                 dropout_rate: Optional[float] = 0.1,
+                 n_heads: int = 8,
+                 mask: bool = True,
+                 qkv_bias: bool = False,
+                 dtype: torch.dtype = torch.float32,
+                 # Mixin init variables
+                 kv_window_size: Optional[int] = None):
+        """Standard MHA: set n_kv_group == n_heads (i.e., no grouping)."""
+        super().__init__(
+            d_in=d_in,
+            d_out=d_out,
+            context_length=context_length,
+            dropout_rate=dropout_rate,
+            n_heads=n_heads,
+            n_kv_group=n_heads,
+            mask=mask,
+            qkv_bias=qkv_bias,
+            dtype=dtype,
+            kv_window_size=kv_window_size
+        )
+
+
+class GroupedKeyAttention(CacheMixin, BaseAttention):
     pass
 
 
 class RoPEMHA(RoPEMixin, MultiHeadAttention):
+    pass
+
+
+class RoPEGOA(RoPEMHA, GroupedKeyAttention):
     pass
 
 

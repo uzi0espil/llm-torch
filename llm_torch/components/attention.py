@@ -147,8 +147,8 @@ class BaseAttention(nn.Module):
 
         # linear projections
         self.W_q = nn.Linear(d_in, d_out, dtype=dtype, bias=qkv_bias)
-        self.W_k = nn.Linear(d_in, n_kv_group * head_dim, dtype=dtype, bias=qkv_bias)
-        self.W_v = nn.Linear(d_in, n_kv_group * head_dim, dtype=dtype, bias=qkv_bias)
+        self.W_k = nn.Linear(d_in, n_kv_group * self.head_dim, dtype=dtype, bias=qkv_bias)
+        self.W_v = nn.Linear(d_in, n_kv_group * self.head_dim, dtype=dtype, bias=qkv_bias)
         self.out_proj = nn.Linear(d_out, d_out, dtype=dtype)
         self.dropout = nn.Dropout(dropout_rate) if dropout_rate else None
         self.group_size_ = n_heads // n_kv_group

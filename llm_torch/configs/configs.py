@@ -24,7 +24,12 @@ class ModelConfig:
     drop_rate: Optional[float] = 0.1
     qkv_bias: Optional[bool] = False
     kv_window_size: Optional[int] = None
+    n_kv_group: Optional[int] = None
     dtype: torch.dtype = torch.float32
+
+    def __post_init__(self):
+        if self.n_kv_group is None:
+            self.n_kv_group = self.n_heads
 
 
 @dataclass

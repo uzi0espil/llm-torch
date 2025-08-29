@@ -14,7 +14,7 @@ class TransformerBlock(nn.Module):
         self.mha = attention(d_in=model_cfg.emb_dim, d_out=model_cfg.emb_dim,
                              context_length=context_length, dropout_rate=model_cfg.drop_rate,
                              n_heads=model_cfg.n_heads, qkv_bias=model_cfg.qkv_bias, dtype=model_cfg.dtype,
-                             kv_window_size=model_cfg.kv_window_size,)
+                             kv_window_size=model_cfg.kv_window_size, theta_base=500_000)
         self.ln1 = norm(model_cfg.emb_dim)
         self.ln2 = norm(model_cfg.emb_dim)
 

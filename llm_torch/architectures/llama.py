@@ -1,14 +1,17 @@
+from abc import ABCMeta, abstractmethod
+
 from llm_torch.architectures.base import BaseLLMModel
 from torch import nn
 
-from llm_torch.components.attention import RoPEMHA, RoPEGOA
+from llm_torch.components.attention import RoPEMHA, RoPEGOA, YarnGOA
 from llm_torch.components.normalizers import RMSNorm
 from llm_torch.components.feedforward_blocks import SwiGLUBlock
 from llm_torch.components.activations import SiLU
 from llm_torch.components.transformer_blocks import TransformerBlock
 
 
-class Llama2(BaseLLMModel):
+class BaseLlamaModel(BaseLLMModel, metaclass=ABCMeta):
+    """The main difference between the Llama models are the attention class and configuration."""
 
     def __init__(self, model_cfg, vocab_size, context_length):
         super().__init__(model_cfg, vocab_size, context_length)
@@ -17,12 +20,17 @@ class Llama2(BaseLLMModel):
 
         self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
                                                       context_length=context_length,
-                                                      attention=RoPEMHA,
+                                                      attention=self.attention,
                                                       norm=RMSNorm,
                                                       ff_block=SwiGLUBlock,
                                                       activation=SiLU) for _ in range(model_cfg.n_layers)])
         self.norm = RMSNorm(model_cfg.emb_dim)
         self.output = nn.Linear(model_cfg.emb_dim, vocab_size, bias=False, dtype=model_cfg.dtype)
+
+    @property
+    @abstractmethod
+    def attention(self):
+        raise NotImplemented
 
     @property
     def transformer_blocks(self) -> nn.ModuleList:
@@ -36,18 +44,22 @@ class Llama2(BaseLLMModel):
         return self.output(x)
 
 
-class Llama3(Llama2):
+class Llama2(BaseLlamaModel):
 
-    def __init__(self, model_cfg, vocab_size, context_length):
-        super().__init__(model_cfg, vocab_size, context_length)
+    @property
+    def attention(self):
+        return RoPEMHA
 
-        self.tok_embedding = nn.Embedding(vocab_size, model_cfg.emb_dim, dtype=model_cfg.dtype)
 
-        self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
-                                                      context_length=context_length,
-                                                      attention=RoPEGOA,
-                                                      norm=RMSNorm,
-                                                      ff_block=SwiGLUBlock,
-                                                      activation=SiLU) for _ in range(model_cfg.n_layers)])
-        self.norm = RMSNorm(model_cfg.emb_dim)
-        self.output = nn.Linear(model_cfg.emb_dim, vocab_size, bias=False, dtype=model_cfg.dtype)
+class Llama3(BaseLlamaModel):
+
+    @property
+    def attention(self):
+        return RoPEGOA
+
+
+class Llama31(BaseLlamaModel):
+
+    @property
+    def attention(self):
+        return YarnGOA

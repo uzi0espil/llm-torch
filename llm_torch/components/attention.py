@@ -12,6 +12,9 @@ class RoPEMixin(object):
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
+        if cls.__name__.endswith("Mixin"):
+            return
+
         if not issubclass(cls, BaseAttention):
             raise TypeError(f"{cls.__name__} must inherit from BaseAttention.")
 
@@ -29,12 +32,15 @@ class RoPEMixin(object):
             persistent=False,
         )
 
+    def _pos_map(self, pos):
+        return pos[:, None]
+
     def _apply_rope(self, x: torch.Tensor, start_index: int) -> torch.Tensor:
         """Apply RoPE to (b, h, seq, d). Uses even/odd interleaving, not first-half/second-half split."""
         b, h, seq, d = x.shape
-        half = d // 2
         pos = torch.arange(start_index, start_index + seq, device=x.device, dtype=torch.float32)
-        angles = pos[:, None] * self.freqs[None, :]
+        pos = self._pos_map(pos)
+        angles = (pos * self.freqs[None, :]).to(x.device)
         cos = torch.cos(angles).unsqueeze(0).unsqueeze(0)  # (1,1,seq,half)
         sin = torch.sin(angles).unsqueeze(0).unsqueeze(0)
 
@@ -56,6 +62,30 @@ class RoPEMixin(object):
 
     def transform_queries(self, queries: torch.Tensor, start_index: int = 0) -> torch.Tensor:
         return self._apply_rope(queries, start_index)
+
+
+class YarnMixin(RoPEMixin):
+    """Standalone implementation of Yarn, ideally you want to extend RoPEMixin,
+    but I separate it for learning purposes."""
+    def __init__(self,
+                 factor: float,
+                 low_freq: float,
+                 high_freq: float,
+                 *args,
+                 original_max_pos_embeddings: Optional[int] = None,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        half = self.head_dim // 2
+        idx = torch.arange(half, dtype=torch.float32)
+        frac = idx / (half - 1) if half > 1 else torch.zeros_like(idx)
+        per_dim = factor * (low_freq + (high_freq - low_freq) * frac)  # (half,)
+        self.register_buffer("per_dim_scale", per_dim, persistent=False)
+        self.orig_max_pos = original_max_pos_embeddings or self.context_length
+
+    def _pos_map(self, pos):
+        base = torch.minimum(pos, torch.tensor(float(self.orig_max_pos), device=pos.device))[:, None]
+        extra = torch.relu(pos - float(self.orig_max_pos))[:, None]
+        return base + extra / self.per_dim_scale[None, :].to(pos.device)
 
 
 class CacheMixin(object):
@@ -244,6 +274,10 @@ class RoPEMHA(RoPEMixin, MultiHeadAttention):
 
 
 class RoPEGOA(RoPEMHA, GroupedKeyAttention):
+    pass
+
+
+class YarnGOA(YarnMixin, GroupedKeyAttention):
     pass
 
 

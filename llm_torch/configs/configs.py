@@ -16,6 +16,20 @@ class DatasetConfig:
 
 
 @dataclass
+class RoPEConfig:
+    theta_base: float = 10_000
+
+
+@dataclass
+class YarnConfig:
+    factor: float
+    low_freq: float
+    high_freq: float
+    original_max_pos_embeddings: Optional[int] = None
+    theta_base: float = 10_000
+
+
+@dataclass
 class ModelConfig:
     emb_dim: int
     n_heads: int
@@ -26,6 +40,7 @@ class ModelConfig:
     kv_window_size: Optional[int] = None
     n_kv_group: Optional[int] = None
     dtype: torch.dtype = torch.float32
+    rope_scaling: Optional[RoPEConfig | YarnConfig] = None
 
     def __post_init__(self):
         if self.n_kv_group is None:

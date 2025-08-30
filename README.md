@@ -6,6 +6,18 @@ Welcome to **LLM-Torch**! This repository is a learning-focused project dedicate
 
 This project is created for educational purposes. While the aim is to build a robust framework, it is not intended to be a production-ready solution. It serves as a hands-on guide for anyone interested in understanding the architecture, training, and implementation details of models like GPT-2.
 
+## Implemented Models
+
+This framework currently includes the following model architectures:
+
+*   **GPT-2**: A from-scratch implementation of the GPT-2 architecture. It uses a standard `TransformerBlock` with `MultiHeadAttention`, `LayerNorm`, and a `GELU` activation function in the feed-forward network.
+
+*   **Llama2**: An implementation of the Llama 2 architecture. It utilizes `RoPEMHA` (Rotary Positional Embedding Multi-Head Attention), `RMSNorm` for normalization, and a `SwiGLUBlock` with `SiLU` activation.
+
+*   **Llama3**: An implementation of the Llama 3 architecture, which features `RoPEGOA` (Rotary Positional Embedding Grouped Query Attention).
+
+*   **Llama3.1**: A Llama 3.1 implementation that uses `YarnGOA` (Yet another RoPE with Grouped Query Attention), which is an extension of the RoPE method for better handling of long contexts.
+
 ## Project Structure
 
 The repository is organized into a modular structure to ensure a clear separation of concerns, making it easy to navigate, extend, and experiment with different components.

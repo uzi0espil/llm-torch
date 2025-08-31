@@ -1,7 +1,7 @@
 from llm_torch.architectures.gpt import GPT2
-from llm_torch.architectures.llama import Llama2, Llama3, Llama31
+from llm_torch.architectures.llama import Llama2, Llama3, Llama31, Llama32
 
-__all__ = ["GPT2", "Llama2", "Llama3", "Llama31", "get"]
+__all__ = ["GPT2", "Llama2", "Llama3", "Llama31", "Llama32", "get"]
 
 
 def get(name: str):
@@ -14,5 +14,7 @@ def get(name: str):
         return Llama3
     elif name.lower() == "llama31":
         return Llama31
+    elif name.lower() == "llama32":
+        return Llama32
     else:
         raise ValueError(f"Unknown LLM architecture: {name}.")

@@ -1,7 +1,7 @@
 from llm_torch.configs.configs import (LLMConfig, TrainerConfig, DatasetConfig,
                                        CallbackConfig, ModelConfig, YarnConfig)
 from llm_torch.configs.gpt import GPT2_CONFIG_124
-from llm_torch.configs.llama import LLAMA2_CONFIG_7B, LLAMA3_CONFIG_8B, LLAMA31_CONFIG_8B
+from llm_torch.configs.llama import LLAMA2_CONFIG_7B, LLAMA3_CONFIG_8B, LLAMA31_CONFIG_8B, LLAMA32_CONFIG_1B
 
 
 __all__ = ["get", "LLMConfig", "GPT2_CONFIG_124", "LLAMA2_CONFIG_7B", "LLAMA3_CONFIG_8B", "LLAMA31_CONFIG_8B",

@@ -18,6 +18,8 @@ This framework currently includes the following model architectures:
 
 *   **Llama3.1**: A Llama 3.1 implementation that uses `YarnGOA` (Yet another RoPE with Grouped Query Attention), which is an extension of the RoPE method for better handling of long contexts.
 
+*   **Llama3.2**: It shrunk in size comparing to Llama3.1, increased the rescaling factor of Yarn, and they added back the weight tying between the input token embedding and the output layer.
+
 ## Project Structure
 
 The repository is organized into a modular structure to ensure a clear separation of concerns, making it easy to navigate, extend, and experiment with different components.

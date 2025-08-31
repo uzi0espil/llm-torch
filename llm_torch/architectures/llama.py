@@ -63,3 +63,12 @@ class Llama31(BaseLlamaModel):
     @property
     def attention(self):
         return YarnGOA
+
+
+class Llama32(Llama31):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # tying the embedding and output weight.
+        self.tok_embedding.weight = self.output.weight
+

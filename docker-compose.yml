@@ -1,5 +1,9 @@
 services:
   dev:
+    tty: true
+    stdin_open: true
+    environment:
+      - PYTHONUNBUFFERED=1
     build: .
     volumes:
       - .:/app

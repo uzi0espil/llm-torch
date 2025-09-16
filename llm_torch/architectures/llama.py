@@ -4,9 +4,7 @@ from llm_torch.architectures.base import BaseLLMModel
 from torch import nn
 
 from llm_torch.components.attention import RoPEMHA, RoPEGOA, YarnGOA
-from llm_torch.components.normalizers import RMSNorm
-from llm_torch.components.feedforward_blocks import SwiGLUBlock
-from llm_torch.components.activations import SiLU
+from llm_torch.components.normalizer import RMSNorm
 from llm_torch.components.transformer_blocks import TransformerBlock
 
 
@@ -21,9 +19,7 @@ class BaseLlamaModel(BaseLLMModel, metaclass=ABCMeta):
         self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
                                                       context_length=context_length,
                                                       attention=self.attention,
-                                                      norm=RMSNorm,
-                                                      ff_block=SwiGLUBlock,
-                                                      activation=SiLU) for _ in range(model_cfg.n_layers)])
+                                                      norm=RMSNorm) for _ in range(model_cfg.n_layers)])
         self.norm = RMSNorm(model_cfg.emb_dim)
         self.output = nn.Linear(model_cfg.emb_dim, vocab_size, bias=False, dtype=model_cfg.dtype)
 

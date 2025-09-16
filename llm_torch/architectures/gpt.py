@@ -4,10 +4,8 @@ from torch import nn
 from llm_torch.architectures.base import BaseLLMModel
 from llm_torch.components.transformer_blocks import TransformerBlock
 from llm_torch.components import (
-    GELU,
     MultiHeadAttention,
     LayerNorm,
-    FFBlock,
 )
 from llm_torch.configs import ModelConfig
 
@@ -23,9 +21,7 @@ class GPT2(BaseLLMModel):
         self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
                                                       context_length=context_length,
                                                       attention=MultiHeadAttention,
-                                                      norm=LayerNorm,
-                                                      ff_block=FFBlock,
-                                                      activation=GELU) for _ in range(model_cfg.n_layers)])
+                                                      norm=LayerNorm) for _ in range(model_cfg.n_layers)])
         self.dropout = nn.Dropout(model_cfg.drop_rate)
         self.norm = LayerNorm(model_cfg.emb_dim)
         self.output = nn.Linear(model_cfg.emb_dim, vocab_size, dtype=model_cfg.dtype, bias=False)

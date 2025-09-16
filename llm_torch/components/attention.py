@@ -2,6 +2,7 @@ import torch
 from torch import nn
 from typing import Optional
 
+from llm_torch.components.normalizer import Normalizer
 from llm_torch.utils.core import make_get_function
 
 
@@ -159,6 +160,7 @@ class BaseAttention(nn.Module):
                  n_kv_group: int = 8,
                  mask: bool = True,
                  qkv_bias: bool = False,
+                 qk_norm: Optional[Normalizer] = None,
                  dtype: torch.dtype = torch.float32):
         assert d_out % n_heads == 0, "d_out must be divisible by n_heads"
         assert n_kv_group <= n_heads, "kv_group should be <= than n_heads"
@@ -181,6 +183,8 @@ class BaseAttention(nn.Module):
         self.W_v = nn.Linear(d_in, n_kv_group * self.head_dim, dtype=dtype, bias=qkv_bias)
         self.out_proj = nn.Linear(d_out, d_out, dtype=dtype)
         self.dropout = nn.Dropout(dropout_rate) if dropout_rate else None
+        self.q_norm = qk_norm(self.head_dim) if qk_norm is not None else None
+        self.k_norm = qk_norm(self.head_dim) if qk_norm is not None else None
         self.group_size_ = n_heads // n_kv_group
 
     # overridable hooks
@@ -207,7 +211,12 @@ class BaseAttention(nn.Module):
         k = k.view(b, num_tokens, self.n_kv_group, self.head_dim).transpose(1, 2)
         v = v.view(b, num_tokens, self.n_kv_group, self.head_dim).transpose(1, 2)
 
-        # optional transforms, such RoPE, etc...
+        # Optional normalization
+        if self.q_norm is not None and self.k_norm is not None:
+            q = self.q_norm(q)
+            k = self.k_norm(k)
+
+        # Optional transforms, such RoPE, etc...
         start_k = self.current_pos if (use_cache and hasattr(self, "current_pos")) else 0
         start_q = max(0, start_k + k.size(-2) - q.size(-2))
 
@@ -247,6 +256,7 @@ class MultiHeadAttention(CacheMixin, BaseAttention):
                  n_heads: int = 8,
                  mask: bool = True,
                  qkv_bias: bool = False,
+                 qk_norm: Optional[Normalizer] = False,
                  dtype: torch.dtype = torch.float32,
                  # Mixin init variables
                  kv_window_size: Optional[int] = None):
@@ -261,7 +271,8 @@ class MultiHeadAttention(CacheMixin, BaseAttention):
             mask=mask,
             qkv_bias=qkv_bias,
             dtype=dtype,
-            kv_window_size=kv_window_size
+            kv_window_size=kv_window_size,
+            qk_norm=qk_norm,
         )
 
 

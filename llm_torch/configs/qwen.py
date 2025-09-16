@@ -1,12 +1,12 @@
 import torch
 
 from llm_torch import configs
-from llm_torch.components import callbacks
-from llm_torch.configs.configs import FFBlockConfig
+from llm_torch.components import callbacks, normalizer
 
-GPT2_CONFIG_124 = configs.LLMConfig(
-    vocab_size=50257,
-    context_length=256,
+
+QWEN3_CONFIG_30B = configs.LLMConfig(
+    vocab_size=50257,  # 151_936,
+    context_length=256,  # 262_144
     dataset_config=configs.DatasetConfig(
        batch_size=32,  # it originally trained on 512
        shuffle=True,
@@ -14,11 +14,26 @@ GPT2_CONFIG_124 = configs.LLMConfig(
        stride=1,
     ),
     model_config=configs.ModelConfig(
-       emb_dim=768,
-       n_heads=12,
-       n_layers=12,
-       ff_block_config=FFBlockConfig(
-           hidden_dim=3072,
+       emb_dim=2048,
+        ff_block_config=configs.MoEConfig(
+            hidden_dim=768,
+            n_experts=128,
+            n_experts_per_token=8,
+        ),
+       n_heads=32,
+       n_kv_group=8,
+       n_layers=2,  #48,
+       drop_rate=None,
+       qkv_bias=False,
+       qk_norm=normalizer.RMSNorm,
+       dtype=torch.bfloat16,
+       kv_window_size=None,
+       rope_scaling=configs.YarnConfig(
+           theta_base=10_000_000.0,
+           factor=32.0,
+           low_freq=1.0,
+           high_freq=4.0,
+           original_max_pos_embeddings=None
        )
     ),
     train_config=configs.TrainerConfig(

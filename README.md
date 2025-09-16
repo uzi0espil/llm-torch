@@ -20,6 +20,8 @@ This framework currently includes the following model architectures:
 
 *   **Llama3.2**: It shrunk in size comparing to Llama3.1, increased the rescaling factor of Yarn, and they added back the weight tying between the input token embedding and the output layer.
 
+*  **Qwen3**: Similar to Llama3.*, it uses `YarnGOA`, but instead of `SwiGLUBlock` it uses Mixture-of-expert `MoEBlock` for the feedforward block, where a router will choose handful of experts for every token. In addition, it adds `RMSNorm` on Key and Query of GOA. Finally, Although it uses bfloat16 as data type. However, the mean and std of `RMSNorm` is computed with float32.
+
 ## Project Structure
 
 The repository is organized into a modular structure to ensure a clear separation of concerns, making it easy to navigate, extend, and experiment with different components.

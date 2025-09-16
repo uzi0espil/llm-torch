@@ -7,16 +7,18 @@ from llm_torch.configs.configs import ModelConfig
 
 class TransformerBlock(nn.Module):
 
-    def __init__(self, model_cfg: ModelConfig, context_length, attention, ff_block, activation, norm):
+    def __init__(self, model_cfg: ModelConfig, context_length, attention, norm):
         super().__init__()
 
-        attention_kwargs = asdict(model_cfg.rope_scaling) or {}
+
+        attention_kwargs = {} if model_cfg.rope_scaling is None else asdict(model_cfg.rope_scaling)
 
         self.dropout = nn.Dropout(model_cfg.drop_rate) if model_cfg.drop_rate is not None else None
-        self.ff = ff_block(model_cfg.emb_dim, model_cfg.hidden_dim, activation=activation, dtype=model_cfg.dtype)
+        self.ff = model_cfg.ff_block_config.instantiate(model_cfg.emb_dim, dtype=model_cfg.dtype)
         self.mha = attention(d_in=model_cfg.emb_dim, d_out=model_cfg.emb_dim,
                              context_length=context_length, dropout_rate=model_cfg.drop_rate,
-                             n_heads=model_cfg.n_heads, qkv_bias=model_cfg.qkv_bias, dtype=model_cfg.dtype,
+                             n_heads=model_cfg.n_heads, qkv_bias=model_cfg.qkv_bias,
+                             dtype=model_cfg.dtype, qk_norm=model_cfg.qk_norm,
                              kv_window_size=model_cfg.kv_window_size, **attention_kwargs)
         self.ln1 = norm(model_cfg.emb_dim)
         self.ln2 = norm(model_cfg.emb_dim)

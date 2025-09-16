@@ -1,11 +1,13 @@
-from llm_torch.configs.configs import (LLMConfig, TrainerConfig, DatasetConfig,
-                                       CallbackConfig, ModelConfig, YarnConfig)
+from llm_torch.configs.configs import (LLMConfig, TrainerConfig, DatasetConfig, RoPEConfig, SwiGLUBlockConfig,
+                                       CallbackConfig, ModelConfig, YarnConfig, MoEConfig)
 from llm_torch.configs.gpt import GPT2_CONFIG_124
 from llm_torch.configs.llama import LLAMA2_CONFIG_7B, LLAMA3_CONFIG_8B, LLAMA31_CONFIG_8B, LLAMA32_CONFIG_1B
+from llm_torch.configs.qwen import QWEN3_CONFIG_30B
 
 
 __all__ = ["get", "LLMConfig", "GPT2_CONFIG_124", "LLAMA2_CONFIG_7B", "LLAMA3_CONFIG_8B", "LLAMA31_CONFIG_8B",
-           "TrainerConfig", "DatasetConfig", "CallbackConfig", "ModelConfig", "YarnConfig"]
+           "QWEN3_CONFIG_30B", "RoPEConfig", "SwiGLUBlockConfig", "TrainerConfig", "DatasetConfig", "CallbackConfig",
+           "MoEConfig", "ModelConfig", "YarnConfig"]
 
 
 def get(name, size):

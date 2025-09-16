@@ -1,10 +1,15 @@
 from __future__ import annotations
+
+from abc import abstractmethod, ABCMeta
 from typing import Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from typing import Type, Dict, Any, Callable, List
 import torch
 
 from llm_torch.components.callbacks import Callback
+from llm_torch.components.normalizer import Normalizer
+from llm_torch.components.feedforward_blocks import FFBaseBlock, FFBlock, MoEBlock, SwiGLUBlock
+from llm_torch.components.activations import GELU, SiLU
 
 
 @dataclass
@@ -29,14 +34,59 @@ class YarnConfig:
     theta_base: float = 10_000
 
 
+@dataclass(kw_only=True)
+class FFBaseConfig(metaclass=ABCMeta):
+    hidden_dim: int
+    activation: torch.nn.Module = GELU
+
+    @abstractmethod
+    def block_class(self) -> FFBaseBlock:
+        raise NotImplementedError("Return the block class.")
+
+    def instantiate(self, emb_dim: int, dtype) -> FFBaseBlock:
+        config = {f.name: getattr(self, f.name) for f in fields(self)}
+        config.update(dict(emb_dim=emb_dim, dtype=dtype))
+        return self.block_class(**config)
+
+
+@dataclass
+class FFBlockConfig(FFBaseConfig):
+
+    @property
+    def block_class(self):
+        return FFBlock
+
+
+@dataclass
+class SwiGLUBlockConfig(FFBaseConfig):
+    activation: torch.nn.Module = SiLU
+
+    @property
+    def block_class(self):
+        return SwiGLUBlock
+
+
+@dataclass(kw_only=True)
+class MoEConfig(FFBaseConfig):
+    n_experts: int
+    n_experts_per_token: int = 1
+    ff_block: Type[FFBaseBlock] = SwiGLUBlock
+    activation: torch.nn.Module = SiLU
+
+    @property
+    def block_class(self):
+        return MoEBlock
+
+
 @dataclass
 class ModelConfig:
     emb_dim: int
     n_heads: int
-    hidden_dim: int
+    ff_block_config: FFBlockConfig | SwiGLUBlockConfig | MoEConfig
     n_layers: int = 12
     drop_rate: Optional[float] = 0.1
     qkv_bias: Optional[bool] = False
+    qk_norm: Optional[Type[Normalizer]]= None
     kv_window_size: Optional[int] = None
     n_kv_group: Optional[int] = None
     dtype: torch.dtype = torch.float32

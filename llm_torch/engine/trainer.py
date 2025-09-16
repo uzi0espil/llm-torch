@@ -2,10 +2,11 @@ from __future__ import annotations
 import torch
 from torch.utils.data import DataLoader
 import logging
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import time
 from typing import List, Optional
 import importlib
+import sys
 
 from llm_torch.configs import TrainerConfig
 from llm_torch.components import Callback
@@ -50,7 +51,7 @@ class Trainer(object):
             batch_time_accum = 0.0
 
             desc = f"Epoch {epoch + 1}/{self.config.epochs}"
-            pbar = tqdm(train_loader, total=n_batches, desc=desc, leave=True)
+            pbar = tqdm(train_loader, total=n_batches, desc=desc, leave=True, file=sys.stderr)
 
             [callback.on_epoch_begin(epoch) for callback in self.callbacks]
             for i, (b_input, b_target) in enumerate(pbar):
@@ -92,6 +93,7 @@ class Trainer(object):
                     self.model.train()
 
                 pbar.set_postfix(pbar_stats)
+                pbar.refresh()
                 self.global_step_ += 1
 
             pbar.close()

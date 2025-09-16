@@ -2,7 +2,7 @@ import torch
 
 from llm_torch import configs
 from llm_torch.components import callbacks
-from llm_torch.configs.configs import RoPEConfig
+
 
 LLAMA2_CONFIG_7B = configs.LLMConfig(
     vocab_size=50257,  # 32000,
@@ -15,7 +15,9 @@ LLAMA2_CONFIG_7B = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
        emb_dim=768, #4096,
-       hidden_dim=11008,
+       ff_block_config=configs.SwiGLUBlockConfig(
+           hidden_dim=11008,
+       ),
        n_heads=2, #32,
        n_layers=2, #32,
        drop_rate=None,
@@ -54,7 +56,9 @@ LLAMA3_CONFIG_8B = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
        emb_dim=1024, #4096,
-       hidden_dim=2816,  #14_336
+       ff_block_config=configs.SwiGLUBlockConfig(
+           hidden_dim=8192,  # 14_336
+       ),
        n_heads=16, #32,
        n_kv_group=4, #8
        n_layers=12, #32,
@@ -62,7 +66,7 @@ LLAMA3_CONFIG_8B = configs.LLMConfig(
        qkv_bias=False,
        dtype=torch.bfloat16,
        kv_window_size=None,
-       rope_scaling=RoPEConfig(theta_base=500_000.0)
+       rope_scaling=configs.RoPEConfig(theta_base=500_000.0)
     ),
     train_config=configs.TrainerConfig(
        epochs=3,
@@ -95,7 +99,9 @@ LLAMA31_CONFIG_8B = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
        emb_dim=1024, #4096,
-       hidden_dim=2816,  #14_336
+       ff_block_config=configs.SwiGLUBlockConfig(
+           hidden_dim=8192,  #14_336
+       ),
        n_heads=16, #32,
        n_kv_group=4, #8
        n_layers=12, #32,
@@ -142,7 +148,6 @@ LLAMA32_CONFIG_1B = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
        emb_dim=2048,
-       hidden_dim=8192,
        n_heads=32,
        n_kv_group=8,
        n_layers=16,
@@ -150,6 +155,9 @@ LLAMA32_CONFIG_1B = configs.LLMConfig(
        qkv_bias=False,
        dtype=torch.bfloat16,
        kv_window_size=None,
+       ff_block_config=configs.SwiGLUBlockConfig(
+           hidden_dim=8192,
+       ),
        rope_scaling=configs.YarnConfig(
            theta_base=500_000.0,
            factor=32.0,
@@ -189,7 +197,9 @@ LLAMA32_CONFIG_3B = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
        emb_dim=3072,
-       hidden_dim=8192,
+        ff_block_config=configs.SwiGLUBlockConfig(
+            hidden_dim=8192,
+        ),
        n_heads=24,
        n_kv_group=8,
        n_layers=28,

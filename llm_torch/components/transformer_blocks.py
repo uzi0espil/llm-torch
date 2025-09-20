@@ -7,7 +7,7 @@ from llm_torch.configs.configs import ModelConfig
 
 class TransformerBlock(nn.Module):
 
-    def __init__(self, model_cfg: ModelConfig, context_length, attention, norm):
+    def __init__(self, model_cfg: ModelConfig, context_length, attention):
         super().__init__()
 
 
@@ -20,8 +20,8 @@ class TransformerBlock(nn.Module):
                              n_heads=model_cfg.n_heads, qkv_bias=model_cfg.qkv_bias,
                              dtype=model_cfg.dtype, qk_norm=model_cfg.qk_norm,
                              kv_window_size=model_cfg.kv_window_size, **attention_kwargs)
-        self.ln1 = norm(model_cfg.emb_dim)
-        self.ln2 = norm(model_cfg.emb_dim)
+        self.ln1 = model_cfg.normalizer_config.instantiate(model_cfg.emb_dim)
+        self.ln2 = model_cfg.normalizer_config.instantiate(model_cfg.emb_dim)
 
     def forward(self, x, use_cache=False):
         residual_connection = x

@@ -20,10 +20,9 @@ class GPT2(BaseLLMModel):
 
         self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
                                                       context_length=context_length,
-                                                      attention=MultiHeadAttention,
-                                                      norm=LayerNorm) for _ in range(model_cfg.n_layers)])
+                                                      attention=MultiHeadAttention,) for _ in range(model_cfg.n_layers)])
         self.dropout = nn.Dropout(model_cfg.drop_rate)
-        self.norm = LayerNorm(model_cfg.emb_dim)
+        self.norm = model_cfg.normalizer_config.instantiate(model_cfg.emb_dim)
         self.output = nn.Linear(model_cfg.emb_dim, vocab_size, dtype=model_cfg.dtype, bias=False)
         self.current_position = 0
 

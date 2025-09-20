@@ -7,7 +7,7 @@ from typing import Type, Dict, Any, Callable, List
 import torch
 
 from llm_torch.components.callbacks import Callback
-from llm_torch.components.normalizer import Normalizer
+from llm_torch.components.normalizer import Normalizer, LayerNorm, RMSNorm
 from llm_torch.components.feedforward_blocks import FFBaseBlock, FFBlock, MoEBlock, SwiGLUBlock
 from llm_torch.components.activations import GELU, SiLU
 
@@ -19,6 +19,7 @@ class DatasetConfig:
     max_length: int = 256
     stride: int = 1
 
+# Attention Dataclasses
 
 @dataclass
 class RoPEConfig:
@@ -33,6 +34,41 @@ class YarnConfig:
     original_max_pos_embeddings: Optional[int] = None
     theta_base: float = 10_000
 
+# Normalizers
+
+@dataclass(kw_only=True)
+class NormalizerConfig(metaclass=ABCMeta):
+    eps: float = 1e-6
+
+    @property
+    @abstractmethod
+    def normalizer_cls(self) -> Type[Normalizer]:
+        raise NotImplementedError
+
+    def instantiate(self, emb_dim: int, **overrides) -> Normalizer:
+        config = {f.name: getattr(self, f.name) for f in fields(self)}
+        config.update(**overrides)
+        config.setdefault("emb_dim", emb_dim)
+        return self.normalizer_cls(**config)
+
+
+@dataclass(kw_only=True)
+class LayerNormConfig(NormalizerConfig):
+
+    @property
+    def normalizer_cls(self) -> Type[Normalizer]:
+        return LayerNorm
+
+
+@dataclass(kw_only=True)
+class RMSNormConfig(NormalizerConfig):
+    dtype: Optional[torch.dtype] = None
+
+    @property
+    def normalizer_cls(self) -> Type[Normalizer]:
+        return RMSNorm
+
+# FeedForward Block Configurations
 
 @dataclass(kw_only=True)
 class FFBaseConfig(metaclass=ABCMeta):
@@ -83,10 +119,11 @@ class ModelConfig:
     emb_dim: int
     n_heads: int
     ff_block_config: FFBlockConfig | SwiGLUBlockConfig | MoEConfig
+    normalizer_config: NormalizerConfig
     n_layers: int = 12
     drop_rate: Optional[float] = 0.1
     qkv_bias: Optional[bool] = False
-    qk_norm: Optional[Type[Normalizer]]= None
+    qk_norm: Optional[NormalizerConfig]= None
     kv_window_size: Optional[int] = None
     n_kv_group: Optional[int] = None
     dtype: torch.dtype = torch.float32

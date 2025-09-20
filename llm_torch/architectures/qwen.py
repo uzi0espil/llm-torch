@@ -15,11 +15,10 @@ class Qwen3(BaseLLMModel):
 
         self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
                                                      context_length=context_length,
-                                                     attention=self.attention,
-                                                     norm=RMSNorm) for _ in range(model_cfg.n_layers)])
+                                                     attention=self.attention) for _ in range(model_cfg.n_layers)])
 
         # the Norm mean and std are computed with float32 before projected back to original dtype.
-        self.norm = RMSNorm(model_cfg.emb_dim, dtype=torch.float32)
+        self.norm = model_cfg.normalizer_config.instantiate(model_cfg.emb_dim)
         self.output = nn.Linear(model_cfg.emb_dim, vocab_size, bias=False, dtype=model_cfg.dtype)
 
 

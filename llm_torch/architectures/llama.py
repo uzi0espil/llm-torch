@@ -18,8 +18,7 @@ class BaseLlamaModel(BaseLLMModel, metaclass=ABCMeta):
 
         self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
                                                       context_length=context_length,
-                                                      attention=self.attention,
-                                                      norm=RMSNorm) for _ in range(model_cfg.n_layers)])
+                                                      attention=self.attention) for _ in range(model_cfg.n_layers)])
         self.norm = RMSNorm(model_cfg.emb_dim)
         self.output = nn.Linear(model_cfg.emb_dim, vocab_size, bias=False, dtype=model_cfg.dtype)
 

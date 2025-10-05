@@ -1,8 +1,10 @@
 from abc import ABCMeta, abstractmethod
 import torch
+from torch import nn
 from typing import Optional
 
 from llm_torch.configs import ModelConfig
+from llm_torch.components.transformer_blocks import TransformerBlock
 
 
 class BaseLLMModel(torch.nn.Module, metaclass=ABCMeta):
@@ -14,14 +16,38 @@ class BaseLLMModel(torch.nn.Module, metaclass=ABCMeta):
         self.vocab_size = vocab_size
         self.context_length = context_length
 
+        # embedding
+        self.tok_embedding = nn.Embedding(vocab_size, config.emb_dim, dtype=config.dtype)
+
+        # blocks
+        self.blocks = nn.ModuleList([TransformerBlock(
+            config,
+            context_length=context_length
+        ) for _ in range(config.n_layers)])
+
+        # dropout if given
+        self.dropout = nn.Dropout(config.drop_rate) if config.drop_rate and config.drop_rate > 0.0 else None
+        # final norm
+        self.norm = config.normalizer_config.instantiate(config.emb_dim)
+        # final layer
+        self.output = nn.Linear(config.emb_dim, vocab_size, bias=False, dtype=config.dtype)
+
+    def embed(self, x, use_cache=False):
+        return self.tok_embedding(x)
+
     def forward(self, x, use_cache: bool = False):
-        raise NotImplementedError
+        x = self.embed(x, use_cache=use_cache)
+        if self.dropout is not None:
+            x = self.dropout(x)
+        for block in self.blocks:
+            x = block(x, use_cache=use_cache)
+        x = self.norm(x)
+        return self.output(x)
 
     @property
-    @abstractmethod
     def transformer_blocks(self) -> torch.nn.ModuleList:
         """Return the List of blocks"""
-        raise NotImplementedError
+        raise self.blocks
 
     def overall_state_dict(self, save_to: Optional[str] = None) -> dict:
         states = dict(

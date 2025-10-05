@@ -14,16 +14,18 @@ LLAMA2_CONFIG_7B = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
         emb_dim=768,  # 4096,
+        drop_rate=None,
+        n_layers=2,  # 32,
+        dtype=torch.bfloat16,
         ff_block_config=configs.SwiGLUBlockConfig(
             hidden_dim=11008,
         ),
         normalizer_config=configs.RMSNormConfig(),
-        n_heads=2,  # 32,
-        n_layers=2,  # 32,
-        drop_rate=None,
-        qkv_bias=False,
-        dtype=torch.bfloat16,
-        kv_window_size=256,
+        attention_config=configs.RoPEMultiHeadAttentionConfig(
+            n_heads=2,  # 32,
+            qkv_bias=False,
+            kv_window_size=256,
+        )
     ),
     train_config=configs.TrainerConfig(
         epochs=3,
@@ -59,14 +61,16 @@ LLAMA3_CONFIG_8B = configs.LLMConfig(
             hidden_dim=8192,  # 14_336
         ),
         normalizer_config=configs.RMSNormConfig(),
-        n_heads=16,  # 32,
-        n_kv_group=4,  # 8
         n_layers=12,  # 32,
         drop_rate=None,
-        qkv_bias=False,
         dtype=torch.bfloat16,
-        kv_window_size=None,
-        rope_scaling=configs.RoPEConfig(theta_base=500_000.0)
+        attention_config=configs.RoPEGroupedAttentionConfig(
+            kv_window_size=None,
+            qkv_bias=False,
+            n_heads=16,  # 32,
+            n_kv_group=4,  # 8
+            theta_base=500_000.0,
+        )
     ),
     train_config=configs.TrainerConfig(
         epochs=3,
@@ -102,20 +106,22 @@ LLAMA31_CONFIG_8B = configs.LLMConfig(
             hidden_dim=8192,  # 14_336
         ),
         normalizer_config=configs.RMSNormConfig(),
-        n_heads=16,  # 32,
-        n_kv_group=4,  # 8
-        n_layers=12,  # 32,
-        drop_rate=None,
-        qkv_bias=False,
-        dtype=torch.bfloat16,
-        kv_window_size=None,
-        rope_scaling=configs.YarnConfig(
+        attention_config=configs.YarnGroupedAttentionConfig(
+            n_heads=16,  # 32,
+            n_kv_group=4,  # 8
+            qkv_bias=False,
+            kv_window_size=None,
             theta_base=500_000.0,
             factor=8.0,
             low_freq=1.0,
             high_freq=4.0,
             original_max_pos_embeddings=None  # 8192,  # originally llama3.1 fine-tuned and not trained from scratch.
-        )
+        ),
+        n_layers=12,  # 32,
+        drop_rate=None,
+        dtype=torch.bfloat16,
+
+
     ),
     train_config=configs.TrainerConfig(
         epochs=3,
@@ -147,18 +153,18 @@ LLAMA32_CONFIG_1B = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
         emb_dim=2048,
-        n_heads=32,
-        n_kv_group=8,
         n_layers=16,
         drop_rate=None,
-        qkv_bias=False,
         dtype=torch.bfloat16,
-        kv_window_size=None,
         ff_block_config=configs.SwiGLUBlockConfig(
             hidden_dim=8192,
         ),
         normalizer_config=configs.RMSNormConfig(),
-        rope_scaling=configs.YarnConfig(
+        attention_config=configs.YarnGroupedAttentionConfig(
+            n_heads=32,
+            n_kv_group=8,
+            qkv_bias=False,
+            kv_window_size=None,
             theta_base=500_000.0,
             factor=32.0,
             low_freq=1.0,
@@ -200,20 +206,20 @@ LLAMA32_CONFIG_3B = configs.LLMConfig(
             hidden_dim=8192,
         ),
         normalizer_config=configs.RMSNormConfig(),
-        n_heads=24,
-        n_kv_group=8,
-        n_layers=28,
-        drop_rate=None,
-        qkv_bias=False,
-        dtype=torch.bfloat16,
-        kv_window_size=None,
-        rope_scaling=configs.YarnConfig(
+        attention_config=configs.YarnGroupedAttentionConfig(
+            n_heads=24,
+            n_kv_group=8,
+            qkv_bias=False,
+            kv_window_size=None,
             theta_base=500_000.0,
             factor=32.0,
             low_freq=1.0,
             high_freq=4.0,
             original_max_pos_embeddings=None  # 8192,  # originally llama3.1 fine-tuned and not trained from scratch.
-        )
+        ),
+        n_layers=28,
+        drop_rate=None,
+        dtype=torch.bfloat16,
     ),
     train_config=configs.TrainerConfig(
         epochs=3,

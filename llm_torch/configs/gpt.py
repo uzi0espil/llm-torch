@@ -4,7 +4,7 @@ from llm_torch import configs
 from llm_torch.components import callbacks
 from llm_torch.configs.configs import FFBlockConfig
 
-GPT2_CONFIG_124 = configs.LLMConfig(
+GPT2_CONFIG_124M = configs.LLMConfig(
     vocab_size=50257,
     context_length=256,
     dataset_config=configs.DatasetConfig(
@@ -15,12 +15,14 @@ GPT2_CONFIG_124 = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
         emb_dim=768,
-        n_heads=12,
         n_layers=12,
         ff_block_config=FFBlockConfig(
             hidden_dim=3072,
         ),
         normalizer_config=configs.LayerNormConfig(),
+        attention_config=configs.MultiHeadAttentionConfig(
+            n_heads=12,
+        ),
     ),
     train_config=configs.TrainerConfig(
         epochs=3,

@@ -16,16 +16,13 @@ class BaseLlamaModel(BaseLLMModel, metaclass=ABCMeta):
 
         self.tok_embedding = nn.Embedding(vocab_size, model_cfg.emb_dim, dtype=model_cfg.dtype)
 
-        self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
-                                                      context_length=context_length,
-                                                      attention=self.attention) for _ in range(model_cfg.n_layers)])
+        self.blocks = nn.ModuleList([TransformerBlock(
+            model_cfg,
+            context_length=context_length
+        ) for _ in range(model_cfg.n_layers)])
+
         self.norm = RMSNorm(model_cfg.emb_dim)
         self.output = nn.Linear(model_cfg.emb_dim, vocab_size, bias=False, dtype=model_cfg.dtype)
-
-    @property
-    @abstractmethod
-    def attention(self):
-        raise NotImplemented
 
     @property
     def transformer_blocks(self) -> nn.ModuleList:
@@ -40,24 +37,15 @@ class BaseLlamaModel(BaseLLMModel, metaclass=ABCMeta):
 
 
 class Llama2(BaseLlamaModel):
-
-    @property
-    def attention(self):
-        return RoPEMHA
+    pass
 
 
 class Llama3(BaseLlamaModel):
-
-    @property
-    def attention(self):
-        return RoPEGOA
+    pass
 
 
 class Llama31(BaseLlamaModel):
-
-    @property
-    def attention(self):
-        return YarnGOA
+    pass
 
 
 class Llama32(Llama31):

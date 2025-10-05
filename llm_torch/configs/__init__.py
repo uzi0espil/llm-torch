@@ -1,29 +1,35 @@
-from llm_torch.configs.configs import (LLMConfig, TrainerConfig, DatasetConfig, RoPEConfig, SwiGLUBlockConfig,
-                                       CallbackConfig, ModelConfig, YarnConfig, MoEConfig, LayerNormConfig,
-                                       RMSNormConfig)
-from llm_torch.configs.gpt import GPT2_CONFIG_124
-from llm_torch.configs.llama import LLAMA2_CONFIG_7B, LLAMA3_CONFIG_8B, LLAMA31_CONFIG_8B, LLAMA32_CONFIG_1B
+from llm_torch.configs.configs import (LLMConfig, TrainerConfig, DatasetConfig, SwiGLUBlockConfig,
+                                       CallbackConfig, ModelConfig, MoEConfig, LayerNormConfig,
+                                       RMSNormConfig, MultiHeadAttentionConfig, RoPEMultiHeadAttentionConfig,
+                                       YarnGroupedAttentionConfig, RoPEGroupedAttentionConfig)
+from llm_torch.configs.gpt import GPT2_CONFIG_124M
+from llm_torch.configs.llama import (LLAMA2_CONFIG_7B, LLAMA3_CONFIG_8B, LLAMA31_CONFIG_8B,
+                                     LLAMA32_CONFIG_1B, LLAMA32_CONFIG_3B)
 from llm_torch.configs.qwen import QWEN3_CONFIG_30B
 
 
 __all__ = [
     "get",
     "LLMConfig",
-    "GPT2_CONFIG_124",
+    "GPT2_CONFIG_124M",
     "LLAMA2_CONFIG_7B",
     "LLAMA3_CONFIG_8B",
     "LLAMA31_CONFIG_8B",
+    "LLAMA32_CONFIG_3B",
     "QWEN3_CONFIG_30B",
-    "RoPEConfig",
     "SwiGLUBlockConfig",
     "TrainerConfig",
     "DatasetConfig",
     "CallbackConfig",
     "MoEConfig",
     "ModelConfig",
-    "YarnConfig",
     "LayerNormConfig",
-    "RMSNormConfig",]
+    "RMSNormConfig",
+    "RoPEMultiHeadAttentionConfig",
+    "MultiHeadAttentionConfig",
+    "yarnGroupedAttentionConfig",
+    "RoPEGroupedAttentionConfig",
+]
 
 
 def get(name, size):

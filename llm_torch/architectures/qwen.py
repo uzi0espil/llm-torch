@@ -4,7 +4,6 @@ from torch import nn
 
 from llm_torch.components.transformer_blocks import TransformerBlock
 from llm_torch.components.normalizer import RMSNorm
-from llm_torch.components.attention import YarnGOA
 
 
 class Qwen3(BaseLLMModel):
@@ -13,18 +12,14 @@ class Qwen3(BaseLLMModel):
         super().__init__(model_cfg, vocab_size, context_length)
         self.tok_embedding = nn.Embedding(vocab_size, model_cfg.emb_dim, dtype=model_cfg.dtype)
 
-        self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
-                                                     context_length=context_length,
-                                                     attention=self.attention) for _ in range(model_cfg.n_layers)])
+        self.blocks = nn.ModuleList([TransformerBlock(
+            model_cfg,
+            context_length=context_length
+        ) for _ in range(model_cfg.n_layers)])
 
         # the Norm mean and std are computed with float32 before projected back to original dtype.
         self.norm = model_cfg.normalizer_config.instantiate(model_cfg.emb_dim)
         self.output = nn.Linear(model_cfg.emb_dim, vocab_size, bias=False, dtype=model_cfg.dtype)
-
-
-    @property
-    def attention(self):
-        return YarnGOA
 
     @property
     def transformer_blocks(self) -> torch.nn.ModuleList:

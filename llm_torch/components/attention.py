@@ -284,7 +284,7 @@ class RoPEMHA(RoPEMixin, MultiHeadAttention):
     pass
 
 
-class RoPEGOA(RoPEMHA, GroupedKeyAttention):
+class RoPEGOA(RoPEMixin, GroupedKeyAttention):
     pass
 
 

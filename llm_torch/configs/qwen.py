@@ -3,6 +3,7 @@ import torch
 from llm_torch import configs
 from llm_torch.components import callbacks, normalizer
 
+
 QWEN3_CONFIG_30B = configs.LLMConfig(
     vocab_size=50257,  # 151_936,
     context_length=256,  # 262_144
@@ -20,21 +21,21 @@ QWEN3_CONFIG_30B = configs.LLMConfig(
             n_experts_per_token=8,
         ),
         normalizer_config=configs.RMSNormConfig(dtype=torch.float32),
-        n_heads=32,
-        n_kv_group=8,
-        n_layers=2,  # 48,
-        drop_rate=None,
-        qkv_bias=False,
-        qk_norm=configs.RMSNormConfig(dtype=torch.float32),
-        dtype=torch.bfloat16,
-        kv_window_size=None,
-        rope_scaling=configs.YarnConfig(
+        attention_config=configs.YarnGroupedAttentionConfig(
+            n_heads=32,
+            n_kv_group=8,
+            qkv_bias=False,
+            qk_norm=configs.RMSNormConfig(dtype=torch.float32),
+            kv_window_size=None,
             theta_base=10_000_000.0,
             factor=32.0,
             low_freq=1.0,
             high_freq=4.0,
             original_max_pos_embeddings=None
-        )
+        ),
+        n_layers=2,  # 48,
+        drop_rate=None,
+        dtype=torch.bfloat16,
     ),
     train_config=configs.TrainerConfig(
         epochs=3,

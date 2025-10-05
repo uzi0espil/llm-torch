@@ -18,9 +18,11 @@ class GPT2(BaseLLMModel):
         self.tok_embedding = nn.Embedding(vocab_size, model_cfg.emb_dim, dtype=model_cfg.dtype)
         self.pos_embedding = nn.Embedding(context_length, model_cfg.emb_dim, dtype=model_cfg.dtype)
 
-        self.blocks = nn.ModuleList([TransformerBlock(model_cfg,
-                                                      context_length=context_length,
-                                                      attention=MultiHeadAttention,) for _ in range(model_cfg.n_layers)])
+        self.blocks = nn.ModuleList([TransformerBlock(
+            model_cfg,
+            context_length=context_length
+        ) for _ in range(model_cfg.n_layers)])
+
         self.dropout = nn.Dropout(model_cfg.drop_rate)
         self.norm = model_cfg.normalizer_config.instantiate(model_cfg.emb_dim)
         self.output = nn.Linear(model_cfg.emb_dim, vocab_size, dtype=model_cfg.dtype, bias=False)

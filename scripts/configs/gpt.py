@@ -2,7 +2,7 @@ import torch
 
 from llm_torch import configs
 from llm_torch.components import callbacks
-from llm_torch.configs.configs import FFBlockConfig
+
 
 GPT2_CONFIG_124M = configs.LLMConfig(
     vocab_size=50257,
@@ -16,7 +16,7 @@ GPT2_CONFIG_124M = configs.LLMConfig(
     model_config=configs.ModelConfig(
         emb_dim=768,
         n_layers=12,
-        ff_block_config=FFBlockConfig(
+        ff_block_config=configs.FFBlockConfig(
             hidden_dim=3072,
         ),
         normalizer_config=configs.LayerNormConfig(),

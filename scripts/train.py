@@ -3,11 +3,13 @@ from typing import Optional
 import argparse
 import tiktoken
 
-from llm_torch.configs import LLMConfig, get as get_config
+from llm_torch.configs import LLMConfig
 from llm_torch.data import create_dataloader
 from llm_torch.engine import Trainer, Predictor
 from llm_torch.architectures import get as get_llm
 from llm_torch.utils import plot_losses
+
+from scripts.configs import get as get_config
 
 
 def train(data_path, llm: str, config: LLMConfig, tokenizer,

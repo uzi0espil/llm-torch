@@ -3,6 +3,7 @@ import torch
 from llm_torch import configs
 from llm_torch.components import callbacks
 
+
 LLAMA2_CONFIG_7B = configs.LLMConfig(
     vocab_size=50257,  # 32000,
     context_length=256,
@@ -153,6 +154,7 @@ LLAMA32_CONFIG_1B = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
         emb_dim=2048,
+        tie_weight=True,
         n_layers=16,
         drop_rate=None,
         dtype=torch.bfloat16,
@@ -202,6 +204,7 @@ LLAMA32_CONFIG_3B = configs.LLMConfig(
     ),
     model_config=configs.ModelConfig(
         emb_dim=3072,
+        tie_weight=True,
         ff_block_config=configs.SwiGLUBlockConfig(
             hidden_dim=8192,
         ),

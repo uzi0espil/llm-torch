@@ -1,16 +1,14 @@
 from __future__ import annotations
 
-from abc import abstractmethod, ABCMeta
 from typing import Optional
-from dataclasses import dataclass, field, fields
+from dataclasses import dataclass, field
 from typing import Type, Dict, Any, Callable, List
 import torch
 
 from llm_torch.components.callbacks import Callback
-from llm_torch.components.normalizer import Normalizer, LayerNorm, RMSNorm
-from llm_torch.components.feedforward_blocks import FFBaseBlock, FFBlock, MoEBlock, SwiGLUBlock
-from llm_torch.components.attention import MultiHeadAttention, RoPEGOA, RoPEMHA, YarnGOA
-from llm_torch.components.activations import GELU, SiLU
+from llm_torch.configs.normalizer import NormalizerConfig
+from llm_torch.configs.feedforward_blocks import FFBaseConfig
+from llm_torch.configs.attention import AttentionConfig
 
 
 @dataclass
@@ -20,168 +18,14 @@ class DatasetConfig:
     max_length: int = 256
     stride: int = 1
 
-# Attention Dataclasses
-
-@dataclass(kw_only=True)
-class AttentionConfig(metaclass=ABCMeta):
-    n_heads: int
-    dropout_rate: Optional[float] = 0.1
-    mask: bool = True
-    qkv_bias: bool = False
-    qk_norm: Optional[NormalizerConfig] = None
-    kv_window_size: Optional[int] = None
-
-    def __post_init__(self):
-        if self.qk_norm is not None:
-            self.qk_norm = self._build_qk_norm_factory()
-
-    @property
-    @abstractmethod
-    def attention_cls(self):
-        raise NotImplementedError("Return the attention class.")
-
-    def _build_qk_norm_factory(self):
-        if self.qk_norm is None:
-            return None
-
-        def factory(emb_dim, *, _cfg=self.qk_norm):
-            return _cfg.instantiate(emb_dim)
-
-        return factory
-
-    def instantiate(self, context_length: int, **overrides):
-        config = {f.name: getattr(self, f.name) for f in fields(self)}
-        config.update(overrides)
-        config.setdefault("context_length", context_length)
-        return self.attention_cls(**config)
-
-
-@dataclass(kw_only=True)
-class MultiHeadAttentionConfig(AttentionConfig):
-
-    @property
-    def attention_cls(self):
-        return MultiHeadAttention
-
-
-@dataclass(kw_only=True)
-class RoPEMultiHeadAttentionConfig(AttentionConfig):
-    theta_base: float = 10_000.0
-
-    @property
-    def attention_cls(self):
-        return RoPEMHA
-
-
-@dataclass(kw_only=True)
-class RoPEGroupedAttentionConfig(AttentionConfig):
-    n_kv_group: int
-    theta_base: float = 10_000.0
-
-    @property
-    def attention_cls(self):
-        return RoPEGOA
-
-
-@dataclass(kw_only=True)
-class YarnGroupedAttentionConfig(AttentionConfig):
-    n_kv_group: int
-    factor: float
-    low_freq: float
-    high_freq: float
-    original_max_pos_embeddings: Optional[int] = None
-    theta_base: float = 10_000.0
-
-    @property
-    def attention_cls(self):
-        return YarnGOA
-
-# Normalizers
-
-@dataclass(kw_only=True)
-class NormalizerConfig(metaclass=ABCMeta):
-    eps: float = 1e-6
-
-    @property
-    @abstractmethod
-    def normalizer_cls(self) -> Type[Normalizer]:
-        raise NotImplementedError
-
-    def instantiate(self, emb_dim: int, **overrides) -> Normalizer:
-        config = {f.name: getattr(self, f.name) for f in fields(self)}
-        config.update(**overrides)
-        config.setdefault("emb_dim", emb_dim)
-        return self.normalizer_cls(**config)
-
-
-@dataclass(kw_only=True)
-class LayerNormConfig(NormalizerConfig):
-
-    @property
-    def normalizer_cls(self) -> Type[Normalizer]:
-        return LayerNorm
-
-
-@dataclass(kw_only=True)
-class RMSNormConfig(NormalizerConfig):
-    dtype: Optional[torch.dtype] = None
-
-    @property
-    def normalizer_cls(self) -> Type[Normalizer]:
-        return RMSNorm
-
-# FeedForward Block Configurations
-
-@dataclass(kw_only=True)
-class FFBaseConfig(metaclass=ABCMeta):
-    hidden_dim: int
-    activation: torch.nn.Module = GELU
-
-    @abstractmethod
-    def block_class(self) -> FFBaseBlock:
-        raise NotImplementedError("Return the block class.")
-
-    def instantiate(self, emb_dim: int, dtype) -> FFBaseBlock:
-        config = {f.name: getattr(self, f.name) for f in fields(self)}
-        config.update(dict(emb_dim=emb_dim, dtype=dtype))
-        return self.block_class(**config)
-
-
-@dataclass
-class FFBlockConfig(FFBaseConfig):
-
-    @property
-    def block_class(self):
-        return FFBlock
-
-
-@dataclass
-class SwiGLUBlockConfig(FFBaseConfig):
-    activation: torch.nn.Module = SiLU
-
-    @property
-    def block_class(self):
-        return SwiGLUBlock
-
-
-@dataclass(kw_only=True)
-class MoEConfig(FFBaseConfig):
-    n_experts: int
-    n_experts_per_token: int = 1
-    ff_block: Type[FFBaseBlock] = SwiGLUBlock
-    activation: torch.nn.Module = SiLU
-
-    @property
-    def block_class(self):
-        return MoEBlock
-
 
 @dataclass
 class ModelConfig:
     emb_dim: int
-    ff_block_config: FFBlockConfig | SwiGLUBlockConfig | MoEConfig
+    ff_block_config: FFBaseConfig
     attention_config: AttentionConfig
     normalizer_config: NormalizerConfig
+    tie_weight: bool = False
     n_layers: int = 12
     drop_rate: Optional[float] = 0.1
     dtype: torch.dtype = torch.float32

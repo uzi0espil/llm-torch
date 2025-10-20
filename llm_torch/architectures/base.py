@@ -31,6 +31,9 @@ class BaseLLMModel(torch.nn.Module, metaclass=ABCMeta):
         self.norm = config.normalizer_config.instantiate(config.emb_dim)
         # final layer
         self.output = nn.Linear(config.emb_dim, vocab_size, bias=False, dtype=config.dtype)
+        # share output
+        if config.tie_weight:
+            self.tok_embedding.weight = self.output.weight
 
     def embed(self, x, use_cache=False):
         return self.tok_embedding(x)

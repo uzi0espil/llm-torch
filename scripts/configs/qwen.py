@@ -1,7 +1,7 @@
 import torch
 
 from llm_torch import configs
-from llm_torch.components import callbacks, normalizer
+from llm_torch.components import callbacks
 
 
 QWEN3_CONFIG_30B = configs.LLMConfig(

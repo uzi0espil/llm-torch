@@ -75,5 +75,5 @@ To build and run the container, use Docker Compose:
 docker-compose build
 
 # Start a container and get a shell inside it
-docker-compose run --rm dev python scripts/train.py --data-path data/the-verdict.txt --llm gpt2 --size 124
+docker-compose run --rm dev python scripts/train.py --data-path data/the-verdict.txt --llm gpt2 --size 124M
 ```

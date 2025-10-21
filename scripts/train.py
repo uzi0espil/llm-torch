@@ -95,6 +95,6 @@ if __name__ == "__main__":
             text = input("You: ")
             prediction = predictor.predict(text, args.max_new_words, temperature=args.temperature, top_k=args.top_k)
             print(f"{args.llm}: {prediction[0]}")
-        except KeyboardInterrupt or EOFError:
+        except (KeyboardInterrupt, EOFError):
             print("Bye")
             break

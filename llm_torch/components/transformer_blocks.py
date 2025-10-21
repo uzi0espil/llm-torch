@@ -1,6 +1,5 @@
 from __future__ import annotations
 from torch import nn
-from dataclasses import asdict
 
 from llm_torch.configs.configs import ModelConfig
 

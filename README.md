@@ -43,7 +43,8 @@ llm-torch/
 ├── .gitignore
 ├── docker-compose.yml     # Docker Compose file for easy setup
 ├── Dockerfile             # Dockerfile for building the environment
-├── requirements.txt       # Python dependencies
+├── pyproject.toml         # Project metadata and dependency declarations
+├── requirements.txt       # Convenience entry point for `pip install -e .`
 └── README.md              # This file
 ```
 
@@ -60,6 +61,22 @@ llm-torch/
 *   **`data/`**: Stores raw data files (e.g., `.txt` files for training).
 *   **`notebooks/`**: Jupyter notebooks for experimentation, visualization, and analysis.
 
+## Installation & Tooling
+
+Create a virtual environment (or attach to the provided Docker image) and install the runtime dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+For development tooling, including Ruff and pytest, install the additional requirements:
+
+```bash
+pip install -r requirements-dev.txt
+```
+
+Run linting with `ruff check .` and execute tests with `pytest` once suites are added.
+
 ## Docker Usage
 
 For a reproducible and isolated environment, you can use the provided `Dockerfile` and `docker-compose.yml`.
@@ -68,11 +85,14 @@ For a reproducible and isolated environment, you can use the provided `Dockerfil
 
 **Please Note:** The current `Dockerfile` is configured to work with **NVIDIA RTX 50 series GPUs**. The base image and CUDA versions have been selected to be compatible with this hardware. If you are using a different GPU series, you may need to adjust the base image in the `Dockerfile` to match your CUDA driver version.
 
-To build and run the container, use Docker Compose:
+To build and run the container, use Docker Compose. By default it installs runtime dependencies only; pass `BUILD_DEV=true` to bake in linting and test tooling for CI runs:
 
 ```bash
-# Build the Docker image
+# Build the default runtime image
 docker-compose build
+
+# Build a dev/testing image with Ruff + pytest installed
+docker-compose build --build-arg BUILD_DEV=true
 
 # Start a container and get a shell inside it
 docker-compose run --rm dev python scripts/train.py --data-path data/the-verdict.txt --llm gpt2 --size 124M

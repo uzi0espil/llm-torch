@@ -7,6 +7,19 @@ WORKDIR /app
 # adding folder to python path
 ENV PYTHONPATH="/app/llm_torch:${PYTHONPATH}"
 
-# Copy and install your project's requirements
-COPY requirements.txt .
+# Copy dependency manifests
+COPY requirements.txt requirements-dev.txt ./
+
+# Install runtime dependencies
 RUN pip install --no-cache-dir -r requirements.txt
+
+ARG BUILD_DEV=false
+
+# Install dev tooling when requested
+RUN if [ "${BUILD_DEV}" = "true" ]; then \
+        pip install --no-cache-dir -r requirements-dev.txt; \
+    fi
+
+# Copy source into the image
+COPY llm_torch ./llm_torch
+COPY scripts ./scripts

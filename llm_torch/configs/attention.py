@@ -24,6 +24,11 @@ class AttentionConfig(metaclass=ABCMeta):
     def attention_cls(self):
         raise NotImplementedError("Return the attention class.")
 
+    @property
+    @abstractmethod
+    def is_rotary(self) -> bool:
+        raise NotImplementedError("Return whether rotary position encoding is used.")
+
     def _build_qk_norm_factory(self):
         if self.qk_norm is None:
             return None
@@ -47,6 +52,10 @@ class MultiHeadAttentionConfig(AttentionConfig):
     def attention_cls(self):
         return attention.MultiHeadAttention
 
+    @property
+    def is_rotary(self) -> bool:
+        return False
+
 
 @dataclass(kw_only=True)
 class RoPEMultiHeadAttentionConfig(AttentionConfig):
@@ -55,6 +64,23 @@ class RoPEMultiHeadAttentionConfig(AttentionConfig):
     @property
     def attention_cls(self):
         return attention.RoPEMHA
+
+    @property
+    def is_rotary(self) -> bool:
+        return True
+
+
+@dataclass(kw_only=True)
+class GroupedKeyAttention(AttentionConfig):
+    n_kv_group: int
+
+    @property
+    def attention_cls(self):
+        return attention.GroupedKeyAttention
+
+    @property
+    def is_rotary(self) -> bool:
+        return False
 
 
 @dataclass(kw_only=True)
@@ -65,6 +91,10 @@ class RoPEGroupedAttentionConfig(AttentionConfig):
     @property
     def attention_cls(self):
         return attention.RoPEGOA
+
+    @property
+    def is_rotary(self) -> bool:
+        return True
 
 
 @dataclass(kw_only=True)
@@ -79,3 +109,7 @@ class YarnGroupedAttentionConfig(AttentionConfig):
     @property
     def attention_cls(self):
         return attention.YarnGOA
+
+    @property
+    def is_rotary(self) -> bool:
+        return True

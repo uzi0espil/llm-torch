@@ -6,7 +6,7 @@ import tiktoken
 from llm_torch.configs import LLMConfig
 from llm_torch.data import create_dataloader
 from llm_torch.engine import Trainer, Predictor
-from llm_torch.architectures import get as get_llm
+from llm_torch.architectures import Transformer
 from llm_torch.utils import plot_losses
 
 from scripts.configs import get as get_config
@@ -42,8 +42,7 @@ def train(data_path, llm: str, config: LLMConfig, tokenizer,
         **asdict(dataset_config),
     )
 
-    Llm = get_llm(name=llm)
-    model = Llm(config.model_config, config.vocab_size, config.context_length)
+    model = Transformer(config.model_config, config.vocab_size, config.context_length)
 
     callbacks = [callback.instantiate() for callback in config.callback_configs]
     trainer = Trainer(model, config.train_config, callbacks=callbacks, device=device)

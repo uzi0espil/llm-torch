@@ -58,7 +58,7 @@ class Predictor(object):
                 logits = self.model(x, use_cache=self.use_cache)
                 logits = logits[:, -1, :]
 
-                if top_k is not None:
+                if top_k is not None and top_k > 0:
                     k = min(top_k, logits.size(-1))
                     top_values, _ = torch.topk(logits, k=k, dim=-1)  # already returned ordered
                     min_val = top_values[:, -1].unsqueeze(-1)  # take the minimum value for each item in batch

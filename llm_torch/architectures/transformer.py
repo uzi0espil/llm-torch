@@ -68,7 +68,7 @@ class Transformer(torch.nn.Module):
     @property
     def transformer_blocks(self) -> torch.nn.ModuleList:
         """Return the List of blocks"""
-        raise self.blocks
+        return self.blocks
 
     def overall_state_dict(self, save_to: Optional[str] = None) -> dict:
         states = dict(

@@ -141,8 +141,8 @@ class CacheMixin(object):
 
         # need to offset.
         offset = num_keys - num_tokens
-        row_idx = torch.arange(num_tokens).unsqueeze(1)  # (num_tokens, 1)
-        col_idx = torch.arange(num_keys).unsqueeze(0)
+        row_idx = torch.arange(num_tokens).unsqueeze(1).to(device=self.W_q.weight.device)  # (num_tokens, 1)
+        col_idx = torch.arange(num_keys).unsqueeze(0).to(device=self.W_q.weight.device)
         return row_idx + offset < col_idx  # True where j > i + offset
 
     def reset_cache(self):

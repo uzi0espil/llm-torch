@@ -113,7 +113,7 @@ class CacheMixin(object):
             num_tokens = self.kv_window_size
 
         if self.cache_k is None or self.cache_k.size(0) != batch_size:
-            self.cache_k = torch.zeros(batch_size, self.n_heads,
+            self.cache_k = torch.zeros(batch_size, self.n_kv_group,
                                        self.kv_window_size, self.head_dim,
                                        device=k.device, dtype=k.dtype)
             self.cache_v = torch.zeros_like(self.cache_k)

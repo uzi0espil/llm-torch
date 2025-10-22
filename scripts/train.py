@@ -2,6 +2,7 @@ from dataclasses import asdict
 from typing import Optional
 import argparse
 import tiktoken
+import torch
 
 from llm_torch.configs import LLMConfig
 from llm_torch.data import create_dataloader
@@ -14,7 +15,7 @@ from scripts.configs import get as get_config
 
 def train(data_path, model_config: LLMConfig, tokenizer,
           data_split=0.8, to_save: Optional[str] = None,
-          device: str = "cuda"):
+          use_cache=True, device: str = "cuda"):
 
     with open(data_path) as f:
         text_data = f.read()
@@ -54,7 +55,11 @@ def train(data_path, model_config: LLMConfig, tokenizer,
     if to_save:
         trainer.save(to_save)
 
-    return Predictor(trainer.model, tokenizer, device=device)
+    trainer.model.zero_grad(set_to_none=True)
+    del trainer.optimizer
+    torch.cuda.empty_cache()
+
+    return Predictor(trainer.model, tokenizer, device=device, use_cache=use_cache)
 
 
 if __name__ == "__main__":
@@ -74,8 +79,7 @@ if __name__ == "__main__":
                         help="Set the temperature of the prediction.")
     parser.add_argument("--top-k", "-k", type=int, required=False, default=None,
                         help="Consider the top k tokens")
-    parser.add_argument("--use-cache", type=bool, required=False, default=True,
-                        help="Speedup prediction using cache.")
+    parser.add_argument("--no-cache", action="store_true", help="Disable caching in prediction.")
     args = parser.parse_args()
 
     tokenizer = tiktoken.get_encoding("gpt2")  # todo: temp. need to replace it with other tokenizer classes.
@@ -88,6 +92,7 @@ if __name__ == "__main__":
         data_split=args.data_split,
         to_save=args.to_save,
         device=args.device,
+        use_cache=not args.no_cache,
     )
 
     while True:
@@ -96,5 +101,5 @@ if __name__ == "__main__":
             prediction = predictor.predict(text, args.max_new_words, temperature=args.temperature, top_k=args.top_k)
             print(f"{args.llm}: {prediction[0]}")
         except (KeyboardInterrupt, EOFError):
-            print("Bye")
+            print("\nBye")
             break

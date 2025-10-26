@@ -1,6 +1,6 @@
 from dataclasses import dataclass, fields, field
 from abc import abstractmethod, ABCMeta
-from typing import Type
+from typing import Type, Optional
 
 from llm_torch.components import feedforward_blocks as ff_blocks
 from llm_torch.configs.activations import SiLUConfig, GELUConfig, ActivationConfig
@@ -33,6 +33,7 @@ class FFBlockConfig(FFBaseConfig):
 @dataclass
 class SwiGLUBlockConfig(FFBaseConfig):
     activation: ActivationConfig = field(default_factory=SiLUConfig)
+    limit: Optional[float] = None
 
     @property
     def block_class(self):

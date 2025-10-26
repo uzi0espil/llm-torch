@@ -1,17 +1,17 @@
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, field
 from abc import abstractmethod, ABCMeta
 from typing import Type
-import torch
 
 from llm_torch.components import feedforward_blocks as ff_blocks
-from llm_torch.components import activations
+from llm_torch.configs.activations import SiLUConfig, GELUConfig, ActivationConfig
 
 
 @dataclass(kw_only=True)
 class FFBaseConfig(metaclass=ABCMeta):
     hidden_dim: int
-    activation: torch.nn.Module = activations.GELU
+    activation: ActivationConfig = field(default_factory=GELUConfig)
 
+    @property
     @abstractmethod
     def block_class(self) -> ff_blocks.FFBaseBlock:
         raise NotImplementedError("Return the block class.")
@@ -32,7 +32,7 @@ class FFBlockConfig(FFBaseConfig):
 
 @dataclass
 class SwiGLUBlockConfig(FFBaseConfig):
-    activation: torch.nn.Module = activations.SiLU
+    activation: ActivationConfig = field(default_factory=SiLUConfig)
 
     @property
     def block_class(self):
@@ -44,7 +44,7 @@ class MoEConfig(FFBaseConfig):
     n_experts: int
     n_experts_per_token: int = 1
     ff_block: Type[ff_blocks.FFBaseBlock] = ff_blocks.SwiGLUBlock
-    activation: torch.nn.Module = activations.SiLU
+    activation: ActivationConfig = field(default_factory=SiLUConfig)
 
     @property
     def block_class(self):

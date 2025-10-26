@@ -3,6 +3,7 @@ from llm_torch.configs.attention import (MultiHeadAttentionConfig, RoPEMultiHead
                                          YarnGroupedAttentionConfig, RoPEGroupedAttentionConfig)
 from llm_torch.configs.normalizer import RMSNormConfig, LayerNormConfig
 from llm_torch.configs.feedforward_blocks import SwiGLUBlockConfig, MoEConfig, FFBlockConfig
+from llm_torch.configs.activations import GELUConfig, SiLUConfig
 
 
 __all__ = [
@@ -20,4 +21,6 @@ __all__ = [
     "MultiHeadAttentionConfig",
     "YarnGroupedAttentionConfig",
     "RoPEGroupedAttentionConfig",
+    "GELUConfig",
+    "SiLUConfig",
 ]

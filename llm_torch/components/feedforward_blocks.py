@@ -2,6 +2,7 @@ from torch import nn
 import torch
 from llm_torch.components.activations import GELU, SiLU
 from llm_torch.utils.core import make_get_function
+from llm_torch.configs.activations import GELUConfig, SiLUConfig, ActivationConfig
 
 
 class FFBaseBlock(nn.Module):
@@ -10,11 +11,12 @@ class FFBaseBlock(nn.Module):
 
 class FFBlock(FFBaseBlock):
 
-    def __init__(self, emb_dim, hidden_dim, activation=GELU, dtype: torch.dtype = torch.float32):
+    def __init__(self, emb_dim, hidden_dim, activation: ActivationConfig = GELUConfig(),
+                 dtype: torch.dtype = torch.float32):
         super().__init__()
         self.layers = nn.Sequential(
             nn.Linear(emb_dim, hidden_dim, dtype=dtype),
-            activation(),
+            activation.instantiate(),
             nn.Linear(hidden_dim, emb_dim, dtype=dtype)
         )
 
@@ -29,12 +31,13 @@ class SwiGLUBlock(FFBaseBlock):
     letting the model gate information token-wise. SiLU keeps negative partially active and pairs well with the gate.
     Empirical work shows that SiGLU matches or beats GELU at the same compute budget."""
 
-    def __init__(self, emb_dim, hidden_dim, activation=SiLU, dtype: torch.dtype = torch.float32):
+    def __init__(self, emb_dim, hidden_dim, activation: ActivationConfig = SiLUConfig(),
+                 dtype: torch.dtype = torch.float32):
         super().__init__()
         self.f1 = nn.Linear(emb_dim, hidden_dim, dtype=dtype, bias=False)
         self.f2 = nn.Linear(emb_dim, hidden_dim, dtype=dtype, bias=False)
         self.f3 = nn.Linear(hidden_dim, emb_dim, dtype=dtype, bias=False)
-        self.silu = activation()
+        self.silu = activation.instantiate()
 
     def forward(self, x):
         x1 = self.f1(x)
@@ -46,7 +49,7 @@ class SwiGLUBlock(FFBaseBlock):
 class MoEBlock(FFBaseBlock):
 
     def __init__(self, n_experts, emb_dim, hidden_dim, n_experts_per_token=1,
-                 activation=SiLU, ff_block=SwiGLUBlock, dtype=torch.float32):
+                 activation: ActivationConfig = SiLUConfig(), ff_block=SwiGLUBlock, dtype=torch.float32):
         super().__init__()
 
         self.router = nn.Linear(emb_dim, n_experts, bias=False, dtype=dtype)

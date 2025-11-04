@@ -1,8 +1,11 @@
 from torch import nn
 import torch
-from llm_torch.components.activations import GELU, SiLU
+
 from llm_torch.utils.core import make_get_function
 from llm_torch.configs.activations import GELUConfig, SiLUConfig, ActivationConfig
+from llm_torch.configs.feedforward_blocks import FFBaseConfig, SwiGLUBlockConfig
+
+from typing import Optional
 
 
 class FFBaseBlock(nn.Module):
@@ -55,14 +58,17 @@ class SwiGLUBlock(FFBaseBlock):
 class MoEBlock(FFBaseBlock):
 
     def __init__(self, n_experts, emb_dim, hidden_dim, n_experts_per_token=1,
-                 activation: ActivationConfig = SiLUConfig(), ff_block=SwiGLUBlock, dtype=torch.float32):
+                 activation: ActivationConfig = SiLUConfig(), ff_block: Optional[FFBaseConfig] = None,
+                 dtype=torch.float32):
         super().__init__()
 
         self.router = nn.Linear(emb_dim, n_experts, bias=False, dtype=dtype)
         self.n_experts_per_token = n_experts_per_token
         self.n_experts = n_experts
+        if ff_block is None:
+            ff_block = SwiGLUBlockConfig(hidden_dim=hidden_dim, activation=activation)
         self.ffs = nn.ModuleList(
-            ff_block(emb_dim, hidden_dim, activation=activation, dtype=dtype) for _ in range(n_experts)
+            ff_block.instantiate(emb_dim=emb_dim, dtype=dtype) for _ in range(n_experts)
         )
 
     def forward(self, x):

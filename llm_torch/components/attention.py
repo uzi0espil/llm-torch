@@ -1,4 +1,5 @@
 import torch
+import torch.nn.functional as F
 from torch import nn
 from typing import Optional
 
@@ -135,16 +136,6 @@ class CacheMixin(object):
         values = self.cache_v[:, :, :self.current_pos, :]
         return keys, values
 
-    def get_mask_pool(self, num_tokens, num_keys):
-        if num_tokens == num_keys:  # no cache.
-            return super().get_mask_pool(num_tokens, num_keys)
-
-        # need to offset.
-        offset = num_keys - num_tokens
-        row_idx = torch.arange(num_tokens).unsqueeze(1).to(device=self.W_q.weight.device)  # (num_tokens, 1)
-        col_idx = torch.arange(num_keys).unsqueeze(0).to(device=self.W_q.weight.device)
-        return row_idx + offset < col_idx  # True where j > i + offset
-
     def reset_cache(self):
         self.cache_k, self.cache_v = None, None
 
@@ -194,11 +185,37 @@ class BaseAttention(nn.Module):
     def transform_queries(self, queries: torch.Tensor, start_index: int = 0) -> torch.Tensor:
         return queries
 
-    def get_mask_pool(self, num_tokens, num_keys):
-        return torch.triu(torch.ones(num_tokens, num_keys, dtype=torch.bool, device=self.W_q.weight.device), diagonal=1)
+    def get_mask_pool(self, num_tokens, num_keys, use_cache=False):
+        if not use_cache:
+            return torch.triu(torch.ones(num_tokens, num_keys, dtype=torch.bool,
+                                         device=self.W_q.weight.device), diagonal=1)
+
+        offset = num_keys - num_tokens
+        row_idx = torch.arange(num_tokens).unsqueeze(1).to(device=self.W_q.weight.device)  # (num_tokens, 1)
+        col_idx = torch.arange(num_keys).unsqueeze(0).to(device=self.W_q.weight.device)
+        return row_idx + offset < col_idx  # True where j > i + offset
 
     def persist_kv(self, k, v, num_tokens, batch_size):
         return k, v
+
+    def compute_attention_scores(self, q, k, num_tokens, use_cache=False):
+        attn_scores = q @ k.transpose(2, 3)
+
+        if self.to_mask:
+            mask_pool = self.get_mask_pool(num_tokens, attn_scores.size(-1), use_cache=use_cache)
+            attn_scores.masked_fill_(mask_pool, float("-inf"))
+
+        return attn_scores
+
+    def compute_attention_weights(self, attention_scores):
+        scale = self.head_dim ** 0.5
+        attn_weights = torch.softmax(attention_scores / scale, dim=-1)
+        return attn_weights
+
+    def compute_context(self, attention_weights, v, num_tokens, use_cache=False):
+        context = attention_weights @ v  # (b, h, seq, head_dim)
+        context = context.transpose(1, 2).contiguous().view(v.shape[0], num_tokens, self.d_out)
+        return context
 
     def forward(self, x: torch.Tensor, use_cache: bool = False) -> torch.Tensor:
         b, num_tokens, _ = x.shape
@@ -231,19 +248,15 @@ class BaseAttention(nn.Module):
             v = v.repeat_interleave(self.group_size_, dim=1)
 
         # attention scores (b, h, seq, seq)
-        attn_scores = q @ k.transpose(2, 3)
+        attn_scores = self.compute_attention_scores(q, k, num_tokens=num_tokens, use_cache=use_cache)
 
-        if self.to_mask:
-            mask_pool = self.get_mask_pool(num_tokens, attn_scores.size(-1))
-            attn_scores.masked_fill_(mask_pool, float("-inf"))
-
-        scale = (self.head_dim ** 0.5)
-        attn_weights = torch.softmax(attn_scores / scale, dim=-1)
+        # attention weights
+        attn_weights = self.compute_attention_weights(attn_scores)
         if self.dropout is not None:  # some architectures don't use dropout
             attn_weights = self.dropout(attn_weights)
 
-        context = attn_weights @ v  # (b, h, seq, head_dim)
-        context = context.transpose(1, 2).contiguous().view(b, num_tokens, self.d_out)
+        # context
+        context = self.compute_context(attn_weights, v, num_tokens=num_tokens, use_cache=use_cache)
         return self.out_proj(context)
 
 
@@ -276,6 +289,154 @@ class MultiHeadAttention(CacheMixin, BaseAttention):
         )
 
 
+class NaiveSWA(CacheMixin, BaseAttention):
+    """Naive SWA: computes full scores then masks out tokens beyond the window."""
+
+    def __init__(self,
+                 d_in: int,
+                 d_out: int,
+                 context_length: int,
+                 window_size: int,
+                 dropout_rate: Optional[float] = 0.1,
+                 n_heads: int = 8,
+                 n_kv_group: Optional[int] = None,
+                 qkv_bias: bool = False,
+                 qk_norm: Optional[Normalizer] = None,
+                 kv_window_size: Optional[int] = None,
+                 dtype: torch.dtype = torch.float32):
+        if window_size <= 0:
+            raise ValueError("window_size must be a positive integer.")
+        if window_size > context_length:
+            raise ValueError("window_size cannot exceed context_length.")
+
+        self.window_size = window_size
+        n_kv_group = n_kv_group or n_heads
+        kv_window = kv_window_size or self.window_size
+
+        super().__init__(
+            d_in=d_in,
+            d_out=d_out,
+            context_length=context_length,
+            dropout_rate=dropout_rate,
+            n_heads=n_heads,
+            n_kv_group=n_kv_group,
+            mask=True,
+            qkv_bias=qkv_bias,
+            qk_norm=qk_norm,
+            dtype=dtype,
+            kv_window_size=kv_window,
+        )
+
+    def get_mask_pool(self, num_tokens, num_keys, use_cache: bool = False):
+        base_mask = super().get_mask_pool(num_tokens, num_keys, use_cache=use_cache)
+        device = self.W_q.weight.device
+        row_idx = torch.arange(num_tokens, device=device).unsqueeze(1)  # (tokens, 1)
+        col_idx = torch.arange(num_keys, device=device).unsqueeze(0)    # (1, keys)
+
+        if num_keys == num_tokens:
+            effective_rows = row_idx
+        else:
+            offset = num_keys - num_tokens
+            effective_rows = row_idx + offset
+
+        window_mask = col_idx + self.window_size <= effective_rows
+        return base_mask | window_mask
+
+
+class SlidingWindowAttention(CacheMixin, BaseAttention):
+    """Vectorised SWA that avoids dense matmul by operating on windowed tensors."""
+    def __init__(self,
+                 d_in: int,
+                 d_out: int,
+                 context_length: int,
+                 window_size: int,
+                 dropout_rate: Optional[float] = 0.1,
+                 n_heads: int = 8,
+                 n_kv_group: Optional[int] = None,
+                 qkv_bias: bool = False,
+                 qk_norm: Optional[Normalizer] = None,
+                 kv_window_size: Optional[int] = None,
+                 dtype: torch.dtype = torch.float32):
+        if window_size <= 0:
+            raise ValueError("window_size must be a positive integer.")
+        if window_size > context_length:
+            raise ValueError("window_size cannot exceed context_length.")
+
+        self.window_size = window_size
+        n_kv_group = n_kv_group or n_heads
+        kv_window = kv_window_size or self.window_size
+
+        super().__init__(
+            d_in=d_in,
+            d_out=d_out,
+            context_length=context_length,
+            dropout_rate=dropout_rate,
+            n_heads=n_heads,
+            n_kv_group=n_kv_group,
+            mask=True,
+            qkv_bias=qkv_bias,
+            qk_norm=qk_norm,
+            dtype=dtype,
+            kv_window_size=kv_window,
+        )
+
+    def get_mask_pool(self, num_queries: int, total_keys: int, use_cache: bool = False):
+        """Mask out positions that fall outside the causal window."""
+        device = self.W_q.weight.device
+        w = self.window_size
+
+        # In cache mode, we are processing the *last* num_queries tokens.
+        if use_cache:
+            # Their positions are [total_keys - num_queries, ..., total_keys - 1]
+            start_pos = total_keys - num_queries
+            positions = torch.arange(start_pos, total_keys, device=device)
+        else:
+            # In pre-fill mode, num_queries == total_keys, all positions from 0 to total_keys - 1 are processed.
+            assert num_queries == total_keys, "In non-cache mode, num_queries must equal total_keys"
+            positions = torch.arange(total_keys, device=device)  # Shape (num_queries,)
+
+        # For each query position `pos`, the number of *valid* causal keys in its window is min(pos + 1, window_size).
+        valid_counts = torch.clamp(positions + 1, max=w)  # Shape (num_queries,)
+
+        # The number of "padding" or acausal tokens at the start of the window.
+        pad_counts = w - valid_counts  # Shape (num_queries,)
+        window_positions = torch.arange(w, device=device).unsqueeze(0)  # Shape (1, w)
+        mask = window_positions < pad_counts.unsqueeze(-1)
+
+        return mask.view(1, 1, num_queries, w)  # reshape for broadcasting with attn_scores
+
+    def _apply_sliding_window(self, x, num_tokens, use_cache=False):
+        x_padded = F.pad(x, (0, 0, self.window_size - 1, 0))
+        x_windows = x_padded.unfold(2, self.window_size, 1)  # (b, h, seq_len, d, w)
+        x_windows = x_windows.transpose(-1, -2)  # (b, h, seq_len, w, d)
+
+        if use_cache:
+            return x_windows[:, :, -num_tokens:, :, :]
+        return x_windows
+
+    def compute_attention_scores(self, q, k, num_tokens, use_cache=False):
+        total_keys = k.size(-2)
+        k_windows = self._apply_sliding_window(k, num_tokens, use_cache=use_cache)
+
+        q_expanded = q.unsqueeze(-2)  # (b, h, seq, 1, d)
+        attn_scores = torch.sum(q_expanded * k_windows, dim=-1)  # (b, h, seq, w)
+
+        if self.to_mask:
+            window_mask = self.get_mask_pool(num_queries=num_tokens, total_keys=total_keys, use_cache=use_cache)
+            attn_scores.masked_fill_(window_mask, float("-inf"))
+        return attn_scores
+
+    def compute_context(self, attention_weights, v, num_tokens, use_cache=False):
+        """attention_weights: shape: (b, h, num_tokens, w)"""
+        v_windows = self._apply_sliding_window(v, num_tokens, use_cache=use_cache)
+
+        attn_weights_expanded = attention_weights.unsqueeze(-1)  # (b, h, num_tokens, w, 1)
+        context = torch.sum(attn_weights_expanded * v_windows, dim=-2)  # (b, h, num_tokens, d)
+
+        context = context.transpose(1, 2).contiguous().view(v.shape[0], num_tokens, self.d_out)
+        return context
+
+
 class GroupedKeyAttention(CacheMixin, BaseAttention):
     pass
 
@@ -289,6 +450,10 @@ class RoPEGOA(RoPEMixin, GroupedKeyAttention):
 
 
 class YarnGOA(YarnMixin, GroupedKeyAttention):
+    pass
+
+
+class YarnSWA(YarnMixin, SlidingWindowAttention):
     pass
 
 

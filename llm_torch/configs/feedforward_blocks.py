@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 from dataclasses import dataclass, fields, field
 from abc import abstractmethod, ABCMeta
-from typing import Type, Optional
+from typing import Optional
 
 from llm_torch.components import feedforward_blocks as ff_blocks
 from llm_torch.configs.activations import SiLUConfig, GELUConfig, ActivationConfig
@@ -44,7 +46,7 @@ class SwiGLUBlockConfig(FFBaseConfig):
 class MoEConfig(FFBaseConfig):
     n_experts: int
     n_experts_per_token: int = 1
-    ff_block: Type[ff_blocks.FFBaseBlock] = ff_blocks.SwiGLUBlock
+    ff_block: Optional[FFBaseConfig] = None
     activation: ActivationConfig = field(default_factory=SiLUConfig)
 
     @property

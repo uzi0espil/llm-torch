@@ -7,6 +7,8 @@ from llm_torch.components.normalizer import LayerNorm
 __all__ = [
     "GELU",
     "MultiHeadAttention",
+    "SlidingWindowAttention",
+    "GroupedKeyAttention",
     "Callback",
     "LRCosineAnnealing",
     "GenerateSample",

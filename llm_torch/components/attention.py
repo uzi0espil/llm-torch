@@ -1,7 +1,8 @@
+import math
 import torch
 import torch.nn.functional as F
 from torch import nn
-from typing import Optional
+from typing import Optional, Tuple
 
 from llm_torch.components.normalizer import Normalizer
 from llm_torch.utils.core import make_get_function
@@ -88,6 +89,95 @@ class YarnMixin(RoPEMixin):
         base = torch.minimum(pos, torch.tensor(float(self.orig_max_pos), device=pos.device))[:, None]
         extra = torch.relu(pos - float(self.orig_max_pos))[:, None]
         return base + extra / self.per_dim_scale[None, :].to(pos.device)
+
+
+class NTKMixin(RoPEMixin):
+    """Applies NTK-aware rotary embeddings with YaRN concentration smoothing."""
+    def __init__(self,
+                 factor: float,
+                 alpha: float,
+                 beta: float,
+                 *args,
+                 original_max_pos_embeddings: Optional[int] = None,
+                 **kwargs):
+        super().__init__(*args, **kwargs)
+        self.factor = factor
+        self.alpha = alpha
+        self.beta = beta
+        self.original_max_pos_embeddings = original_max_pos_embeddings or self.context_length
+
+        concentration, inv_freq = self._compute_concentration_and_inv_freq()
+        self.register_buffer(
+            "ntk_inv_freq",
+            inv_freq,
+            persistent=False,
+        )
+        self.register_buffer(
+            "ntk_concentration",
+            torch.tensor(concentration, dtype=torch.float32),
+            persistent=False,
+        )
+
+    def _compute_concentration_and_inv_freq(self) -> Tuple[float, torch.Tensor]:
+        freq = self.theta_base ** (
+            torch.arange(0, self.head_dim, 2, dtype=torch.float32) / self.head_dim
+        )
+        if self.factor > 1.0:
+            concentration = 0.1 * math.log(self.factor) + 1.0
+
+            half = self.head_dim // 2
+            d_half = float(half)
+            low = (
+                d_half
+                * math.log(self.original_max_pos_embeddings / (self.beta * 2 * math.pi))
+                / math.log(self.theta_base)
+            )
+            high = (
+                d_half
+                * math.log(self.original_max_pos_embeddings / (self.alpha * 2 * math.pi))
+                / math.log(self.theta_base)
+            )
+            assert 0 < low < high < d_half - 1
+
+            interpolation = 1.0 / (self.factor * freq)
+            extrapolation = 1.0 / freq
+
+            ramp = (
+                torch.arange(half, dtype=torch.float32) - low
+            ) / (high - low)
+            mask = 1 - ramp.clamp(0, 1)
+            inv_freq = interpolation * (1 - mask) + extrapolation * mask
+        else:
+            concentration = 1.0
+            inv_freq = 1.0 / freq
+
+        return concentration, inv_freq
+
+    def _apply_rope(self, x: torch.Tensor, start_index: int) -> torch.Tensor:
+        b, h, seq, d = x.shape
+        pos = torch.arange(
+            start_index, start_index + seq, device=x.device, dtype=torch.float32
+        )
+        freqs = torch.einsum(
+            "i,j->ij", pos, self.ntk_inv_freq.to(device=x.device, dtype=torch.float32)
+        )
+        concentration = self.ntk_concentration.to(
+            device=x.device, dtype=torch.float32
+        )
+        cos = torch.cos(freqs) * concentration
+        sin = torch.sin(freqs) * concentration
+        cos = cos.unsqueeze(0).unsqueeze(0)
+        sin = sin.unsqueeze(0).unsqueeze(0)
+
+        x_even = x[..., 0::2]
+        x_odd = x[..., 1::2]
+        x_rot_even = x_even * cos - x_odd * sin
+        x_rot_odd = x_even * sin + x_odd * cos
+
+        x_out = torch.empty_like(x)
+        x_out[..., 0::2] = x_rot_even
+        x_out[..., 1::2] = x_rot_odd
+        return x_out.to(dtype=x.dtype)
 
 
 class CacheMixin(object):
@@ -299,6 +389,7 @@ class NaiveSWA(CacheMixin, BaseAttention):
                  window_size: int,
                  dropout_rate: Optional[float] = 0.1,
                  n_heads: int = 8,
+                 mask: bool = True,
                  n_kv_group: Optional[int] = None,
                  qkv_bias: bool = False,
                  qk_norm: Optional[Normalizer] = None,
@@ -320,7 +411,7 @@ class NaiveSWA(CacheMixin, BaseAttention):
             dropout_rate=dropout_rate,
             n_heads=n_heads,
             n_kv_group=n_kv_group,
-            mask=True,
+            mask=mask,
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
             dtype=dtype,
@@ -353,6 +444,7 @@ class SlidingWindowAttention(CacheMixin, BaseAttention):
                  dropout_rate: Optional[float] = 0.1,
                  n_heads: int = 8,
                  n_kv_group: Optional[int] = None,
+                 mask: bool = True,
                  qkv_bias: bool = False,
                  qk_norm: Optional[Normalizer] = None,
                  kv_window_size: Optional[int] = None,
@@ -373,7 +465,7 @@ class SlidingWindowAttention(CacheMixin, BaseAttention):
             dropout_rate=dropout_rate,
             n_heads=n_heads,
             n_kv_group=n_kv_group,
-            mask=True,
+            mask=mask,
             qkv_bias=qkv_bias,
             qk_norm=qk_norm,
             dtype=dtype,
@@ -454,6 +546,14 @@ class YarnGOA(YarnMixin, GroupedKeyAttention):
 
 
 class YarnSWA(YarnMixin, SlidingWindowAttention):
+    pass
+
+
+class NTKSWA(NTKMixin, SlidingWindowAttention):
+    pass
+
+
+class NTKNaiveSWA(NTKSWA, NaiveSWA):
     pass
 
 

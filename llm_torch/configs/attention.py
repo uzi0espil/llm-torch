@@ -7,17 +7,13 @@ from llm_torch.configs.normalizer import NormalizerConfig
 
 
 @dataclass(kw_only=True)
-class MaskMixinConfig:
-    mask: bool = True
-
-
-@dataclass(kw_only=True)
 class AttentionConfig(metaclass=ABCMeta):
     n_heads: int
     dropout_rate: Optional[float] = 0.1
     qkv_bias: bool = False
     qk_norm: Optional[NormalizerConfig] = None
     kv_window_size: Optional[int] = None
+    mask: bool = True
 
     def __post_init__(self):
         if self.qk_norm is not None:
@@ -50,7 +46,7 @@ class AttentionConfig(metaclass=ABCMeta):
 
 
 @dataclass(kw_only=True)
-class MultiHeadAttentionConfig(MaskMixinConfig, AttentionConfig):
+class MultiHeadAttentionConfig(AttentionConfig):
 
     @property
     def attention_cls(self):
@@ -62,7 +58,7 @@ class MultiHeadAttentionConfig(MaskMixinConfig, AttentionConfig):
 
 
 @dataclass(kw_only=True)
-class RoPEMultiHeadAttentionConfig(MaskMixinConfig, AttentionConfig):
+class RoPEMultiHeadAttentionConfig(AttentionConfig):
     theta_base: float = 10_000.0
 
     @property
@@ -75,7 +71,7 @@ class RoPEMultiHeadAttentionConfig(MaskMixinConfig, AttentionConfig):
 
 
 @dataclass(kw_only=True)
-class GroupedKeyAttention(MaskMixinConfig, AttentionConfig):
+class GroupedKeyAttention(AttentionConfig):
     n_kv_group: int
 
     @property
@@ -103,8 +99,8 @@ class SlidingWindowAttentionConfig(AttentionConfig):
 
 @dataclass(kw_only=True)
 class NaiveSWAConfig(AttentionConfig):
-    n_kv_group: int
     window_size: int
+    n_kv_group: Optional[int] = None
 
     @property
     def attention_cls(self):
@@ -116,7 +112,7 @@ class NaiveSWAConfig(AttentionConfig):
 
 
 @dataclass(kw_only=True)
-class RoPEGroupedAttentionConfig(MaskMixinConfig, AttentionConfig):
+class RoPEGroupedAttentionConfig(AttentionConfig):
     n_kv_group: int
     theta_base: float = 10_000.0
 
@@ -130,7 +126,7 @@ class RoPEGroupedAttentionConfig(MaskMixinConfig, AttentionConfig):
 
 
 @dataclass(kw_only=True)
-class YarnGroupedAttentionConfig(MaskMixinConfig, AttentionConfig):
+class YarnGroupedAttentionConfig(AttentionConfig):
     n_kv_group: int
     factor: float
     low_freq: float
@@ -148,9 +144,7 @@ class YarnGroupedAttentionConfig(MaskMixinConfig, AttentionConfig):
 
 
 @dataclass(kw_only=True)
-class YarnSWAConfig(AttentionConfig):
-    n_kv_group: int
-    window_size: int
+class YarnSWAConfig(NaiveSWAConfig):
     factor: float
     low_freq: float
     high_freq: float
@@ -160,6 +154,40 @@ class YarnSWAConfig(AttentionConfig):
     @property
     def attention_cls(self):
         return attention.YarnSWA
+
+    @property
+    def is_rotary(self) -> bool:
+        return True
+
+
+@dataclass(kw_only=True)
+class NTKSWAConfig(NaiveSWAConfig):
+    factor: float
+    alpha: float
+    beta: float
+    original_max_pos_embeddings: Optional[int] = None
+    theta_base: float = 10_000.0
+
+    @property
+    def attention_cls(self):
+        return attention.NTKSWA
+
+    @property
+    def is_rotary(self) -> bool:
+        return True
+
+
+@dataclass(kw_only=True)
+class NTKNaiveSWAConfig(AttentionConfig):
+    factor: float
+    alpha: float
+    beta: float
+    original_max_pos_embeddings: Optional[int] = None
+    theta_base: float = 10_000.0
+
+    @property
+    def attention_cls(self):
+        return attention.NTKNaiveSWA
 
     @property
     def is_rotary(self) -> bool:

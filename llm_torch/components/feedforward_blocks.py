@@ -1,8 +1,11 @@
 from torch import nn
 import torch
-from llm_torch.components.activations import GELU, SiLU
+
 from llm_torch.utils.core import make_get_function
 from llm_torch.configs.activations import GELUConfig, SiLUConfig, ActivationConfig
+from llm_torch.configs.feedforward_blocks import FFBaseConfig, SwiGLUBlockConfig
+
+from typing import Optional
 
 
 class FFBaseBlock(nn.Module):
@@ -29,34 +32,43 @@ class SwiGLUBlock(FFBaseBlock):
 
     Instead of a single path followed by an activation, SwiGLU forms two parallel projections and multiples them,
     letting the model gate information token-wise. SiLU keeps negative partially active and pairs well with the gate.
-    Empirical work shows that SiGLU matches or beats GELU at the same compute budget."""
+    Empirical work shows that SiGLU matches or beats GELU at the same compute budget.
+
+    if emb_dim == hidden_dim, then a third linear projection isn't necessary as per gpt-oss implementation."""
 
     def __init__(self, emb_dim, hidden_dim, activation: ActivationConfig = SiLUConfig(),
-                 dtype: torch.dtype = torch.float32):
+                 limit: float = None, dtype: torch.dtype = torch.float32):
         super().__init__()
         self.f1 = nn.Linear(emb_dim, hidden_dim, dtype=dtype, bias=False)
         self.f2 = nn.Linear(emb_dim, hidden_dim, dtype=dtype, bias=False)
-        self.f3 = nn.Linear(hidden_dim, emb_dim, dtype=dtype, bias=False)
+        self.f3 = nn.Linear(hidden_dim, emb_dim, dtype=dtype, bias=False) if emb_dim != hidden_dim else None
         self.silu = activation.instantiate()
+        self.limit = limit
 
     def forward(self, x):
         x1 = self.f1(x)
         x2 = self.f2(x)
+        if self.limit is not None:
+            x1 = torch.clamp(x1, -self.limit, self.limit)
+            x2 = torch.clamp(x2, -self.limit, self.limit)
         gated = self.silu(x1) * x2
-        return self.f3(gated)
+        return self.f3(gated) if self.f3 is not None else gated
 
 
 class MoEBlock(FFBaseBlock):
 
     def __init__(self, n_experts, emb_dim, hidden_dim, n_experts_per_token=1,
-                 activation: ActivationConfig = SiLUConfig(), ff_block=SwiGLUBlock, dtype=torch.float32):
+                 activation: ActivationConfig = SiLUConfig(), ff_block: Optional[FFBaseConfig] = None,
+                 dtype=torch.float32):
         super().__init__()
 
         self.router = nn.Linear(emb_dim, n_experts, bias=False, dtype=dtype)
         self.n_experts_per_token = n_experts_per_token
         self.n_experts = n_experts
+        if ff_block is None:
+            ff_block = SwiGLUBlockConfig(hidden_dim=hidden_dim, activation=activation)
         self.ffs = nn.ModuleList(
-            ff_block(emb_dim, hidden_dim, activation=activation, dtype=dtype) for _ in range(n_experts)
+            ff_block.instantiate(emb_dim=emb_dim, dtype=dtype) for _ in range(n_experts)
         )
 
     def forward(self, x):

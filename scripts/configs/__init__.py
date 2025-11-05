@@ -1,4 +1,4 @@
-from scripts.configs.gpt import GPT2_CONFIG_124M
+from scripts.configs.gpt import GPT2_CONFIG_124M, GPT_OSS_CONFIG_20B
 from scripts.configs.llama import (LLAMA2_CONFIG_7B, LLAMA3_CONFIG_8B, LLAMA31_CONFIG_8B,
                                    LLAMA32_CONFIG_3B)
 from scripts.configs.qwen import QWEN3_CONFIG_30B
@@ -7,6 +7,7 @@ from scripts.configs.qwen import QWEN3_CONFIG_30B
 __all__ = [
     "get",
     "GPT2_CONFIG_124M",
+    "GPT_OSS_CONFIG_20B",
     "LLAMA2_CONFIG_7B",
     "LLAMA3_CONFIG_8B",
     "LLAMA31_CONFIG_8B",

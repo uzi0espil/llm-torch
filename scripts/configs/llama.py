@@ -3,7 +3,6 @@ import torch
 from llm_torch import configs
 from llm_torch.components import callbacks
 
-
 LLAMA2_CONFIG_7B = configs.LLMConfig(
     vocab_size=50257,  # 32000,
     context_length=256,

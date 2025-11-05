@@ -1,6 +1,8 @@
 from llm_torch.configs.configs import (LLMConfig, TrainerConfig, DatasetConfig, CallbackConfig, ModelConfig)
 from llm_torch.configs.attention import (MultiHeadAttentionConfig, RoPEMultiHeadAttentionConfig,
-                                         YarnGroupedAttentionConfig, RoPEGroupedAttentionConfig)
+                                         YarnGroupedAttentionConfig, RoPEGroupedAttentionConfig,
+                                         YarnSWAConfig, SlidingWindowAttentionConfig, NaiveSWAConfig,
+                                         NTKSWAConfig, NTKNaiveSWAConfig)
 from llm_torch.configs.normalizer import RMSNormConfig, LayerNormConfig
 from llm_torch.configs.feedforward_blocks import SwiGLUBlockConfig, MoEConfig, FFBlockConfig
 from llm_torch.configs.activations import GELUConfig, SiLUConfig
@@ -21,6 +23,11 @@ __all__ = [
     "MultiHeadAttentionConfig",
     "YarnGroupedAttentionConfig",
     "RoPEGroupedAttentionConfig",
+    "YarnSWAConfig",
+    "SlidingWindowAttentionConfig",
+    "NaiveSWAConfig",
+    "NTKNaiveSWAConfig",
+    "NTKSWAConfig",
     "GELUConfig",
     "SiLUConfig",
 ]

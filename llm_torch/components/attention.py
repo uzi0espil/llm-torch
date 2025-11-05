@@ -236,6 +236,7 @@ class BaseAttention(nn.Module):
                  d_in: int,
                  d_out: int,
                  context_length: int,
+                 head_dim: Optional[int] = None,
                  dropout_rate: Optional[float] = 0.1,
                  n_heads: int = 8,
                  n_kv_group: int = 8,
@@ -243,30 +244,33 @@ class BaseAttention(nn.Module):
                  qkv_bias: bool = False,
                  qk_norm: Optional[Normalizer] = None,
                  dtype: torch.dtype = torch.float32):
-        assert d_out % n_heads == 0, "d_out must be divisible by n_heads"
         assert n_kv_group <= n_heads, "kv_group should be <= than n_heads"
         assert n_heads % n_kv_group == 0, "n_heads must be divisible by n_kv_group (for grouping)"
+        if head_dim is None:
+            assert d_out % n_heads == 0, "d_out must be divisible by n_heads"
+
 
         self.d_out = d_out
         self.d_in = d_in
         self.n_heads = n_heads
-        self.head_dim = d_out // n_heads
+        self.head_dim = head_dim or d_out // n_heads
         self.context_length = context_length
         self.to_mask = mask
         self.n_kv_group = n_kv_group
+        self.group_size_ = n_heads // n_kv_group
+        attn_inner = n_heads * self.head_dim
 
         # defer super call until attributes are assigned.
         super().__init__()
 
         # linear projections
-        self.W_q = nn.Linear(d_in, d_out, dtype=dtype, bias=qkv_bias)
+        self.W_q = nn.Linear(d_in, attn_inner, dtype=dtype, bias=qkv_bias)
         self.W_k = nn.Linear(d_in, n_kv_group * self.head_dim, dtype=dtype, bias=qkv_bias)
         self.W_v = nn.Linear(d_in, n_kv_group * self.head_dim, dtype=dtype, bias=qkv_bias)
-        self.out_proj = nn.Linear(d_out, d_out, dtype=dtype)
+        self.out_proj = nn.Linear(attn_inner, d_out, dtype=dtype)
         self.dropout = nn.Dropout(dropout_rate) if dropout_rate else None
         self.q_norm = qk_norm(self.head_dim) if qk_norm is not None else None
         self.k_norm = qk_norm(self.head_dim) if qk_norm is not None else None
-        self.group_size_ = n_heads // n_kv_group
 
     # overridable hooks
     def transform_keys(self, keys: torch.Tensor, start_index: int = 0) -> torch.Tensor:
@@ -304,7 +308,7 @@ class BaseAttention(nn.Module):
 
     def compute_context(self, attention_weights, v, num_tokens, use_cache=False):
         context = attention_weights @ v  # (b, h, seq, head_dim)
-        context = context.transpose(1, 2).contiguous().view(v.shape[0], num_tokens, self.d_out)
+        context = context.transpose(1, 2).contiguous().view(v.shape[0], num_tokens, self.n_heads * self.head_dim)
         return context
 
     def forward(self, x: torch.Tensor, use_cache: bool = False) -> torch.Tensor:
@@ -355,6 +359,7 @@ class MultiHeadAttention(CacheMixin, BaseAttention):
                  d_in: int,
                  d_out: int,
                  context_length: int,
+                 head_dim: Optional[int] = None,
                  dropout_rate: Optional[float] = 0.1,
                  n_heads: int = 8,
                  mask: bool = True,
@@ -368,6 +373,7 @@ class MultiHeadAttention(CacheMixin, BaseAttention):
             d_in=d_in,
             d_out=d_out,
             context_length=context_length,
+            head_dim=head_dim,
             dropout_rate=dropout_rate,
             n_heads=n_heads,
             n_kv_group=n_heads,
@@ -387,6 +393,7 @@ class NaiveSWA(CacheMixin, BaseAttention):
                  d_out: int,
                  context_length: int,
                  window_size: int,
+                 head_dim: Optional[int] = None,
                  dropout_rate: Optional[float] = 0.1,
                  n_heads: int = 8,
                  mask: bool = True,
@@ -408,6 +415,7 @@ class NaiveSWA(CacheMixin, BaseAttention):
             d_in=d_in,
             d_out=d_out,
             context_length=context_length,
+            head_dim=head_dim,
             dropout_rate=dropout_rate,
             n_heads=n_heads,
             n_kv_group=n_kv_group,
@@ -441,6 +449,7 @@ class SlidingWindowAttention(CacheMixin, BaseAttention):
                  d_out: int,
                  context_length: int,
                  window_size: int,
+                 head_dim: Optional[int] = None,
                  dropout_rate: Optional[float] = 0.1,
                  n_heads: int = 8,
                  n_kv_group: Optional[int] = None,
@@ -462,6 +471,7 @@ class SlidingWindowAttention(CacheMixin, BaseAttention):
             d_in=d_in,
             d_out=d_out,
             context_length=context_length,
+            head_dim=head_dim,
             dropout_rate=dropout_rate,
             n_heads=n_heads,
             n_kv_group=n_kv_group,
@@ -525,7 +535,7 @@ class SlidingWindowAttention(CacheMixin, BaseAttention):
         attn_weights_expanded = attention_weights.unsqueeze(-1)  # (b, h, num_tokens, w, 1)
         context = torch.sum(attn_weights_expanded * v_windows, dim=-2)  # (b, h, num_tokens, d)
 
-        context = context.transpose(1, 2).contiguous().view(v.shape[0], num_tokens, self.d_out)
+        context = context.transpose(1, 2).contiguous().view(v.shape[0], num_tokens, self.n_heads * self.head_dim)
         return context
 
 

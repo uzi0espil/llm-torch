@@ -9,6 +9,7 @@ from llm_torch.configs.normalizer import NormalizerConfig
 @dataclass(kw_only=True)
 class AttentionConfig(metaclass=ABCMeta):
     n_heads: int
+    head_dim: Optional[int] = None,
     dropout_rate: Optional[float] = 0.1
     qkv_bias: bool = False
     qk_norm: Optional[NormalizerConfig] = None
